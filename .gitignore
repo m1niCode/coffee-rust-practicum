@@ -1,0 +1,15 @@
+*.pth
+*.pt
+*.docx
+/*/
+!/prototype/
+!/core/
+!/server/
+!/web/
+!/*.py
+!/.gitignore
+!/README.md
+__pycache__/
+node_modules/
+.venv/
+.DS_Store

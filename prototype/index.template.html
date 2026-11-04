@@ -1,0 +1,547 @@
+<title>Анализ ржавчины кофе</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Макет: слева навигация по шагам, справа рабочая область одного экрана.
+   Палитра: лист (зелёный, действие), ржавчина (оранжевый, только для поражения), нейтральные с зелёным оттенком. */
+:root{
+  --bg:#f3f6f0; --surface:#ffffff; --surface2:#f7f9f5; --ink:#18261e; --muted:#587062; --line:#dce4d9;
+  --accent:#2b7a4b; --accent-ink:#ffffff; --accent-soft:#e0f0e5; --accent-line:#b5d7c1;
+  --rust:#c0531a; --rust-soft:#fbe8dc; --ok:#2b7a4b; --warn:#a86a00; --warn-soft:#fdf0d4;
+  --s1:#2b7a4b; --s2:#c0531a; --s3:#5b57c9;
+  --shadow:0 1px 2px rgba(24,38,30,.06),0 4px 16px rgba(24,38,30,.05);
+  --font:'Onest',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101812; --surface:#18241c; --surface2:#1d2b22; --ink:#e7f0e9; --muted:#93a99a; --line:#2a3b2f;
+  --accent:#62c08b; --accent-ink:#0c1f13; --accent-soft:#1f3a2a; --accent-line:#2f5a41;
+  --rust:#f0905a; --rust-soft:#3b2517; --ok:#62c08b; --warn:#e0a63a; --warn-soft:#3a2d10;
+  --s1:#62c08b; --s2:#f0905a; --s3:#9d9af0; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101812; --surface:#18241c; --surface2:#1d2b22; --ink:#e7f0e9; --muted:#93a99a; --line:#2a3b2f;
+  --accent:#62c08b; --accent-ink:#0c1f13; --accent-soft:#1f3a2a; --accent-line:#2f5a41;
+  --rust:#f0905a; --rust-soft:#3b2517; --ok:#62c08b; --warn:#e0a63a; --warn-soft:#3a2d10;
+  --s1:#62c08b; --s2:#f0905a; --s3:#9d9af0; --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.3); color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+h1,h2,h3{margin:0;line-height:1.2;text-wrap:balance}
+h1{font-size:28px;font-weight:700;letter-spacing:-.01em}
+h2{font-size:19px;font-weight:650}
+h3{font-size:16px;font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+.app{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100%}
+/* навигация */
+.side{background:var(--surface);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:12px;padding:4px 10px 18px}
+.brand-mark{width:40px;height:40px;border-radius:12px;background:var(--accent);display:grid;place-items:center;flex:none}
+.brand b{display:block;font-size:17px;line-height:1.15}
+.brand span{font-size:13px;color:var(--muted)}
+.grp{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:16px 12px 6px;font-weight:600}
+.nav{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;border-radius:12px;padding:11px 12px;cursor:pointer;font-weight:500;color:var(--ink)}
+.nav:hover{background:var(--surface2)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:650}
+.nav .n{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:13px;font-family:var(--mono);flex:none;color:var(--muted)}
+.nav[aria-current="page"] .n{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.nav svg{flex:none}
+.side-foot{margin-top:auto;padding:14px 8px 0;display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line)}
+.side-foot .row{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--muted)}
+
+/* рабочая область */
+.main{padding:28px max(24px,env(safe-area-inset-right,0px)) 120px 36px;max-width:1180px;width:100%}
+.proto{background:var(--warn-soft);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:9px 14px;font-size:14px;margin-bottom:22px;display:flex;gap:10px;align-items:center}
+.head{display:flex;flex-direction:column;gap:6px;margin-bottom:24px}
+.head p{color:var(--muted);max-width:68ch}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow);min-width:0}
+.card.flat{box-shadow:none}
+.stack{display:flex;flex-direction:column;gap:18px}
+
+/* кнопки */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:11px 18px;cursor:pointer;font-weight:600;min-height:46px}
+.btn:hover{border-color:var(--accent-line);background:var(--surface2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.big{font-size:17px;padding:14px 26px;min-height:54px}
+.btn.ghost{border-color:transparent;background:none;color:var(--accent)}
+.btn.danger{color:var(--rust);border-color:var(--rust)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:13px;font-weight:600;background:var(--accent-soft);color:var(--accent)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.rust{background:var(--rust-soft);color:var(--rust)}
+.chip.mute{background:var(--surface2);color:var(--muted);border:1px solid var(--line)}
+.help{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--accent-line);background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:13px;cursor:pointer;flex:none;line-height:1;display:inline-grid;place-items:center;padding:0}
+.help:hover{background:var(--accent);color:var(--accent-ink)}
+
+/* главная */
+.start{display:flex;flex-direction:column;gap:14px;padding:28px;text-align:left;cursor:pointer;border:1.5px solid var(--line);background:var(--surface);border-radius:20px;box-shadow:var(--shadow);transition:border-color .15s,transform .15s}
+.start:hover{border-color:var(--accent);transform:translateY(-2px)}
+.start .ic{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.start.alt .ic{background:var(--rust-soft);color:var(--rust)}
+.start h2{font-size:22px}
+.start .go{margin-top:auto;font-weight:650;color:var(--accent)}
+.steps{display:flex;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:14px}
+.steps span{background:var(--surface2);border:1px solid var(--line);border-radius:99px;padding:2px 10px}
+
+/* таблицы */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:540px}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 12px;font-weight:600;border-bottom:1px solid var(--line)}
+td{padding:13px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.pick{cursor:pointer}
+tr.pick:hover td{background:var(--surface2)}
+
+/* формы */
+.field{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:16px 0;border-bottom:1px solid var(--line)}
+.field:last-child{border-bottom:0}
+.field .lbl{display:flex;align-items:center;gap:8px;font-weight:600}
+.field .hint{font-size:14px;color:var(--muted)}
+.path{display:flex;gap:10px;flex-wrap:wrap}
+.in{flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);padding:11px 14px;min-height:46px}
+.in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+select.in{flex:none;min-width:0;width:100%;max-width:420px}
+.stepper{display:inline-flex;align-items:center;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;width:max-content}
+.stepper button{width:46px;height:46px;border:0;background:var(--surface2);cursor:pointer;font-size:20px}
+.stepper button:hover{background:var(--accent-soft)}
+.stepper output{min-width:64px;text-align:center;font-weight:700;font-family:var(--mono)}
+.seg{display:flex;flex-wrap:wrap;gap:8px}
+.seg label{cursor:pointer}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;padding:10px 16px;border:1.5px solid var(--line);border-radius:12px;font-weight:600;background:var(--surface)}
+.seg input:checked+span{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.seg input:focus-visible+span{outline:3px solid var(--accent);outline-offset:2px}
+.toggle{display:flex;gap:10px;align-items:center;cursor:pointer}
+.toggle input{width:20px;height:20px;accent-color:var(--accent)}
+input[type=range]{width:100%;max-width:420px;accent-color:var(--accent)}
+.preset{display:flex;flex-direction:column;gap:6px;padding:18px;border:1.5px solid var(--line);border-radius:16px;background:var(--surface);cursor:pointer;height:100%}
+.seg-preset input{position:absolute;opacity:0}
+.seg-preset input:checked+.preset{border-color:var(--accent);background:var(--accent-soft)}
+.seg-preset input:focus-visible+.preset{outline:3px solid var(--accent);outline-offset:2px}
+.seg-preset label{display:block}
+details.adv{border:1.5px dashed var(--line);border-radius:16px;padding:6px 18px;margin-top:18px}
+details.adv summary{cursor:pointer;font-weight:650;padding:12px 0;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv[open] summary svg{transform:rotate(180deg)}
+
+/* статусы проверки данных */
+.check{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:12px;background:var(--accent-soft);color:var(--ink)}
+.check.warn{background:var(--warn-soft)}
+.check b{font-weight:650}
+
+/* прогресс и графики */
+.bar{height:14px;background:var(--surface2);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .5s}
+.kpi{display:flex;flex-direction:column;gap:2px}
+.kpi b{font-size:30px;font-family:var(--mono);line-height:1.1;letter-spacing:-.02em}
+.kpi span{font-size:14px;color:var(--muted)}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font-size:14px;font-family:var(--font)}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin-top:6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.log{font-family:var(--mono);font-size:13px;display:flex;flex-direction:column;gap:3px;color:var(--muted)}
+.log div:last-child{color:var(--ink)}
+.pbar{position:sticky;bottom:0;margin-top:26px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 0 max(14px,env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--bg) 70%,transparent)}
+
+/* проверка фото */
+.dz{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:26px 16px;border:2px dashed var(--accent-line);border-radius:18px;background:var(--accent-soft);cursor:pointer}
+.dz:hover,.dz.over{border-color:var(--accent);background:var(--surface)}
+.dz input{position:absolute;opacity:0;width:1px;height:1px}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.pair figure{margin:0;display:flex;flex-direction:column;gap:8px}
+.pair .img{background:var(--surface2);border:1px solid var(--line);border-radius:14px;height:min(52vh,440px);display:grid;place-items:center;overflow:hidden}
+.pair img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.pair figcaption{font-weight:600;font-size:14px}
+.cells{display:grid;grid-template-columns:repeat(20,1fr);gap:3px;max-width:340px}
+.cells i{aspect-ratio:1;border-radius:3px;background:var(--accent-soft);border:1px solid var(--accent-line)}
+.cells i.on{background:var(--rust);border-color:var(--rust)}
+.thumbs{display:flex;gap:10px;flex-wrap:wrap}
+.thumbs button{padding:0;border:2px solid var(--line);border-radius:12px;overflow:hidden;width:64px;height:64px;cursor:pointer;background:var(--surface2)}
+.thumbs button[aria-pressed="true"]{border-color:var(--accent)}
+.thumbs img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* окно подсказки */
+.modal{position:fixed;inset:0;background:rgba(10,20,14,.5);display:grid;place-items:center;padding:20px;z-index:50}
+.modal .box{background:var(--surface);border-radius:20px;max-width:520px;width:100%;padding:26px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+.modal h3{color:var(--accent);font-size:19px}
+.modal p{white-space:pre-line}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:12px;font-weight:600;z-index:60}
+
+@media (max-width:980px){.grid3{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;padding:10px max(12px,env(safe-area-inset-left,0px));gap:4px;border-right:0;border-bottom:1px solid var(--line);align-items:center}
+  .brand,.grp,.side-foot .hide-m{display:none}
+  .nav{width:auto;white-space:nowrap;padding:10px 12px}
+  .side-foot{margin:0 0 0 auto;border:0;padding:0;flex-direction:row}
+  .main{padding:20px max(16px,env(safe-area-inset-right,0px)) 100px max(16px,env(safe-area-inset-left,0px))}
+  h1{font-size:24px}
+  .pair{grid-template-columns:1fr}
+  .pair .img{height:min(46vh,380px)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <aside class="side" aria-label="Навигация">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19C5 10 10 5 20 4c0 10-5 15-14 15"/><path d="M5 19c3-5 6-8 10-10"/></svg></div>
+      <div><b>Ржавчина на листьях</b><span>Кофе · анализ по фото</span></div>
+    </div>
+    <button class="nav" data-go="home"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Главная</button>
+    <div class="grp">Обучить модель</div>
+    <button class="nav" data-go="data"><span class="n">1</span>Данные</button>
+    <button class="nav" data-go="params"><span class="n">2</span>Параметры</button>
+    <button class="nav" data-go="train"><span class="n">3</span>Обучение</button>
+    <button class="nav" data-go="results"><span class="n">4</span>Результаты</button>
+    <div class="grp">Применить</div>
+    <button class="nav" data-go="check"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-8 7"/></svg>Проверить фото</button>
+    <div class="side-foot">
+      <div class="row hide-m"><span>Вычисления</span><span class="chip mute">Процессор</span></div>
+      <button class="btn" id="theme" type="button" aria-label="Переключить тему"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span class="hide-m">Тема</span></button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="proto"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg><span>Прототип для согласования. Цифры и снимки взяты из ваших экспериментов <b>exp1–exp3</b> и папки <b>OUT_test</b>; кнопки ничего не считают.</span></div>
+
+    <!-- ГЛАВНАЯ -->
+    <section id="s-home" hidden>
+      <div class="head"><h1>Что будем делать?</h1><p>Научите программу находить ржавчину на фотографиях листьев кофе или сразу проверьте свои снимки готовой моделью.</p></div>
+      <div class="grid2">
+        <button class="start" data-go="data" type="button">
+          <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg></div>
+          <h2>Обучить модель</h2>
+          <p class="muted">Покажите программе фото с отмеченной ржавчиной, и она научится находить её сама.</p>
+          <div class="steps"><span>Данные</span><span>Параметры</span><span>Обучение</span><span>Результаты</span></div>
+          <div class="go">Начать →</div>
+        </button>
+        <button class="start alt" data-go="check" type="button">
+          <div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-4-8 7"/></svg></div>
+          <h2>Проверить фото</h2>
+          <p class="muted">Загрузите снимки листьев и получите долю поражённой площади по каждому кадру.</p>
+          <div class="steps"><span>Выбрать модель</span><span>Загрузить фото</span><span>Смотреть и сохранить</span></div>
+          <div class="go" style="color:var(--rust)">Проверить →</div>
+        </button>
+      </div>
+      <div class="card" style="margin-top:22px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px"><h2>Ваши эксперименты</h2><button class="btn ghost" data-go="results" type="button">Сравнить →</button></div>
+        <div class="tbl-wrap"><table id="home-tbl"></table></div>
+      </div>
+    </section>
+
+    <!-- 1. ДАННЫЕ -->
+    <section id="s-data" hidden>
+      <div class="head"><span class="chip">Шаг 1 из 4</span><h1>Откуда взять фотографии</h1><p>Рядом с каждым фото .jpg должна лежать маска .png с тем же именем: на ней закрашена ржавчина. Укажите три папки.</p></div>
+      <div class="card">
+        <div class="field"><div class="lbl">Для обучения <span class="chip">405 фото</span><button class="help" data-help="train" aria-label="Подсказка">!</button></div><div class="hint">Папка train. Здесь программа учится. Обычно это 70–80% всех снимков.</div>
+          <div class="path"><input class="in" value="C:\Users\Us\kofi\train" aria-label="Путь к папке train"><button class="btn" type="button" data-toast="В приложении откроется окно выбора папки">Обзор…</button></div></div>
+        <div class="field"><div class="lbl">Для проверки в ходе обучения <span class="chip">101 фото</span><button class="help" data-help="valid" aria-label="Подсказка">!</button></div><div class="hint">Папка valid. Эти снимки программа не видит при обучении, на них она сверяется после каждого прохода.</div>
+          <div class="path"><input class="in" value="C:\Users\Us\kofi\valid" aria-label="Путь к папке valid"><button class="btn" type="button" data-toast="В приложении откроется окно выбора папки">Обзор…</button></div></div>
+        <div class="field"><div class="lbl">Для итоговой оценки <span class="chip mute">необязательно</span> <span class="chip">100 фото</span><button class="help" data-help="test" aria-label="Подсказка">!</button></div><div class="hint">Папка test. Используется один раз в конце. Можно оставить пустой.</div>
+          <div class="path"><input class="in" value="C:\Users\Us\kofi\test" aria-label="Путь к папке test"><button class="btn" type="button" data-toast="В приложении откроется окно выбора папки">Обзор…</button></div></div>
+        <div class="field"><div class="lbl">Название эксперимента<button class="help" data-help="run" aria-label="Подсказка">!</button></div><div class="hint">По названию вы потом найдёте результат. Например: «кофе_384_25эпох».</div>
+          <div class="path"><input class="in" value="exp4" style="max-width:320px;flex:none" aria-label="Название эксперимента"></div></div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px"><button class="btn" id="btn-check" type="button">Проверить данные</button></div>
+      <div id="check-out" class="stack" style="margin-top:16px" hidden>
+        <div class="check"><span style="color:var(--ok)">✓</span><div><b>train:</b> найдено 405 пар «фото + маска».</div></div>
+        <div class="check"><span style="color:var(--ok)">✓</span><div><b>valid:</b> найдено 101 пара «фото + маска».</div></div>
+        <div class="check"><span style="color:var(--ok)">✓</span><div><b>test:</b> найдено 100 пар «фото + маска». Итоговая оценка будет посчитана.</div></div>
+        <div class="check"><span style="color:var(--ok)">✓</span><div>Одинаковых снимков в train и valid не найдено.</div></div>
+      </div>
+      <div class="pbar"><span></span><button class="btn primary big" data-go="params" type="button">Далее: параметры →</button></div>
+    </section>
+
+    <!-- 2. ПАРАМЕТРЫ -->
+    <section id="s-params" hidden>
+      <div class="head"><span class="chip">Шаг 2 из 4</span><h1>Как учить модель</h1><p>Для первого раза выберите готовый набор. Любой параметр можно изменить, а сложные спрятаны в «Расширенных настройках».</p></div>
+      <div class="seg-preset grid3" id="presets">
+        <label><input type="radio" name="preset" value="fast"><div class="preset"><b>Быстро</b><span class="muted">Проверить, что всё работает</span><span class="chip mute" style="width:max-content">≈ 5 мин</span></div></label>
+        <label><input type="radio" name="preset" value="bal" checked><div class="preset"><b>Сбалансированно</b><span class="muted">Разумный выбор для большинства случаев</span><span class="chip mute" style="width:max-content">≈ 30 мин</span></div></label>
+        <label><input type="radio" name="preset" value="acc"><div class="preset"><b>Точно</b><span class="muted">Дольше, нужна мощная видеокарта</span><span class="chip mute" style="width:max-content">≈ 2 ч</span></div></label>
+      </div>
+      <div class="grid2" style="margin-top:22px;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);align-items:start" id="params-grid">
+        <div class="card">
+          <h2>Основные настройки</h2>
+          <div class="field"><div class="lbl">Подробность снимков<button class="help" data-help="size" aria-label="Подсказка">!</button></div><div class="hint">Чем крупнее, тем лучше видны мелкие пятна, но тем дольше учится модель.</div>
+            <div class="seg" id="size"><label><input type="radio" name="size" value="256"><span>Низкая · 256</span></label><label><input type="radio" name="size" value="384" checked><span>Средняя · 384</span></label><label><input type="radio" name="size" value="512"><span>Высокая · 512</span></label></div></div>
+          <div class="field"><div class="lbl">Сколько раз просмотреть все фото<button class="help" data-help="epochs" aria-label="Подсказка">!</button></div><div class="hint">Это число эпох. Обычно 15–50. Если качество на графике ещё растёт, добавьте.</div>
+            <div class="stepper"><button type="button" data-step="-5" aria-label="Меньше">−</button><output id="epochs">25</output><button type="button" data-step="5" aria-label="Больше">+</button></div></div>
+          <div class="field"><div class="lbl">Остановиться, если нет улучшения<button class="help" data-help="patience" aria-label="Подсказка">!</button></div><div class="hint">Обучение закончится раньше, а лучшая модель сохранится.</div>
+            <label class="toggle"><input type="checkbox" checked id="early"><span>Остановить через 8 эпох без улучшения</span></label></div>
+          <div class="field"><div class="lbl">Разнообразить фото при обучении<button class="help" data-help="aug" aria-label="Подсказка">!</button></div><div class="hint">Программа слегка отражает, поворачивает и меняет яркость снимков. Так она запоминает меньше лишнего.</div>
+            <div class="seg"><label><input type="checkbox" checked><span>Отражения</span></label><label><input type="checkbox" checked><span>Повороты</span></label><label><input type="checkbox" checked><span>Яркость и контраст</span></label></div></div>
+          <details class="adv">
+            <summary>Расширенные настройки <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></summary>
+            <div class="field"><div class="lbl">Тип нейросети<button class="help" data-help="arch" aria-label="Подсказка">!</button></div><select class="in" aria-label="Тип нейросети"><option>Unet · универсальная, рекомендуется</option><option>FPN · быстрее, границы грубее</option><option>DeepLabV3Plus · для крупных объектов</option></select></div>
+            <div class="field"><div class="lbl">Размер «основы» сети<button class="help" data-help="encoder" aria-label="Подсказка">!</button></div><select class="in" aria-label="Энкодер"><option>resnet18 · лёгкая и быстрая</option><option>resnet34 · компромисс</option><option>resnet50 · мощная и тяжёлая</option></select></div>
+            <div class="field"><div class="lbl">Начать с готовых знаний<button class="help" data-help="pretrained" aria-label="Подсказка">!</button></div><label class="toggle"><input type="checkbox" checked><span>Использовать веса ImageNet (при первом запуске нужен интернет)</span></label></div>
+            <div class="field"><div class="lbl">Фото за один шаг (batch)<button class="help" data-help="batch" aria-label="Подсказка">!</button></div><select class="in" style="max-width:200px" aria-label="batch"><option>2</option><option selected>4</option><option>8</option></select></div>
+            <div class="field"><div class="lbl">Скорость обучения<button class="help" data-help="lr" aria-label="Подсказка">!</button></div><select class="in" style="max-width:200px" aria-label="learning rate"><option>0.0005</option><option selected>0.001</option><option>0.003</option></select></div>
+            <div class="field"><div class="lbl">Вес Dice в ошибке<button class="help" data-help="dice" aria-label="Подсказка">!</button></div><input type="range" min="0" max="1" step="0.05" value="0.5" aria-label="Dice"></div>
+            <div class="field"><div class="lbl">Порог уверенности<button class="help" data-help="thr" aria-label="Подсказка">!</button></div><input type="range" min="0.1" max="0.9" step="0.05" value="0.5" aria-label="Порог"></div>
+            <div class="field"><div class="lbl">Случайное зерно (seed)<button class="help" data-help="seed" aria-label="Подсказка">!</button></div><input class="in" style="max-width:200px;flex:none" value="42" aria-label="seed"></div>
+            <div class="field"><div class="lbl">Где считать<button class="help" data-help="device" aria-label="Подсказка">!</button></div><select class="in" aria-label="Устройство"><option>Авто (видеокарта, если есть)</option><option>Только процессор</option></select></div>
+          </details>
+        </div>
+        <aside class="card flat" style="position:sticky;top:20px">
+          <h3 style="margin-bottom:12px">Что получится</h3>
+          <div class="stack" style="gap:12px">
+            <div class="kpi"><b id="sum-time">≈ 30 мин</b><span>ориентировочное время на процессоре</span></div>
+            <div class="kpi"><b id="sum-size" style="font-size:22px">384 × 384</b><span>размер снимка при обучении</span></div>
+            <div class="kpi"><b id="sum-ep" style="font-size:22px">25 эпох</b><span>максимум проходов по всем фото</span></div>
+            <div class="check warn" style="font-size:14px"><span>i</span><div>Совет: за один запуск меняйте один параметр, тогда будет понятно, что повлияло на результат.</div></div>
+          </div>
+        </aside>
+      </div>
+      <div class="pbar"><button class="btn" data-go="data" type="button">← Назад</button><button class="btn primary big" data-go="train" type="button">Начать обучение</button></div>
+    </section>
+
+    <!-- 3. ОБУЧЕНИЕ -->
+    <section id="s-train" hidden>
+      <div class="head"><span class="chip">Шаг 3 из 4</span><h1 id="train-title">Модель учится</h1><p>Окно можно не закрывать и заняться другим. Лучшая версия сохраняется автоматически.</p></div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+          <div class="kpi"><b id="tr-ep">Эпоха 18 из 50</b><span id="tr-eta">Осталось примерно 11 мин</span></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn danger" id="tr-stop" type="button">Остановить</button><button class="btn primary" id="tr-done" type="button" hidden data-go="results">Смотреть результаты →</button></div>
+        </div>
+        <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="tr-bar-wrap"><i id="tr-bar" style="width:36%"></i></div>
+      </div>
+      <div class="grid3" style="margin-top:18px">
+        <div class="card flat kpi"><b id="tr-iou" style="color:var(--accent)">—</b><span>совпадение с разметкой сейчас</span></div>
+        <div class="card flat kpi"><b id="tr-best">—</b><span>лучший результат за всё время</span></div>
+        <div class="card flat kpi"><b id="tr-loss">—</b><span>ошибка на проверочных фото (меньше — лучше)</span></div>
+      </div>
+      <div class="grid2" style="margin-top:18px">
+        <div class="card"><h3>Совпадение с разметкой <span class="muted" style="font-weight:400">(больше — лучше)</span></h3><svg class="chart" id="ch-q" viewBox="0 0 520 240" role="img" aria-label="График качества по эпохам"></svg></div>
+        <div class="card"><h3>Ошибка модели <span class="muted" style="font-weight:400">(меньше — лучше)</span></h3><svg class="chart" id="ch-l" viewBox="0 0 520 240" role="img" aria-label="График ошибки по эпохам"></svg>
+          <div class="legend"><span><i style="background:var(--s1)"></i>на фото для обучения</span><span><i style="background:var(--s2)"></i>на фото для проверки</span></div></div>
+      </div>
+      <div class="card" style="margin-top:18px"><h3 style="margin-bottom:10px">Журнал</h3><div class="log" id="tr-log"></div></div>
+    </section>
+
+    <!-- 4. РЕЗУЛЬТАТЫ -->
+    <section id="s-results" hidden>
+      <div class="head"><span class="chip">Шаг 4 из 4</span><h1>Результаты и сравнение</h1><p>Отметьте эксперименты, которые хотите сравнить. Выше значение «совпадение с разметкой» — модель точнее находит ржавчину.</p></div>
+      <div class="card">
+        <div class="tbl-wrap"><table id="res-tbl"></table></div>
+      </div>
+      <div class="grid2" style="margin-top:18px;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start">
+        <div class="card"><h3>Как росло качество по эпохам</h3><svg class="chart" id="ch-cmp" viewBox="0 0 560 280" role="img" aria-label="Сравнение экспериментов"></svg><div class="legend" id="cmp-legend"></div></div>
+        <div class="card" id="best-card"></div>
+      </div>
+    </section>
+
+    <!-- ПРОВЕРИТЬ ФОТО -->
+    <section id="s-check" hidden>
+      <div class="head"><h1>Проверить фото</h1><p>Загрузите снимки листьев. Программа покажет, где найдена ржавчина и какую долю площади она занимает.</p></div>
+      <div class="grid2" style="grid-template-columns:minmax(0,320px) minmax(0,1fr);align-items:start" id="chk-grid">
+        <div class="stack">
+          <div class="card">
+            <div class="field" style="padding-top:0"><div class="lbl">Модель</div>
+              <select class="in" id="model" aria-label="Модель"></select></div>
+            <div class="field" style="border:0;padding-bottom:0"><div class="lbl">Чувствительность<button class="help" data-help="thr" aria-label="Подсказка">!</button></div>
+              <input type="range" min="0.1" max="0.9" step="0.05" value="0.5" id="sens" aria-label="Чувствительность">
+              <div class="hint" style="display:flex;justify-content:space-between"><span>находит больше, чаще ошибается</span><span>осторожнее</span></div></div>
+          </div>
+          <label class="dz" id="dz"><input type="file" id="files" multiple accept="image/jpeg">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+            <b>Перетащите фото сюда</b><span class="muted">или нажмите, чтобы выбрать файлы .jpg</span><span class="chip" id="dz-n" hidden></span></label>
+          <button class="btn" type="button" data-toast="В приложении файл results.csv сохранится в папку результатов">Сохранить таблицу (CSV)</button>
+        </div>
+        <div class="stack" style="min-width:0">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+              <h2 id="fr-title">Кадр 1 из 3</h2>
+              <div style="display:flex;gap:8px;align-items:center"><button class="btn" id="fr-prev" type="button" aria-label="Предыдущий">←</button><button class="btn" id="fr-next" type="button" aria-label="Следующий">→</button></div>
+            </div>
+            <div class="pair"><figure><div class="img"><img id="fr-photo" alt="Исходное фото листа"></div><figcaption>Исходное фото</figcaption></figure>
+              <figure><div class="img"><img id="fr-over" alt="Лист с выделенной ржавчиной"></div><figcaption>Найденная ржавчина <span class="chip rust">контур</span></figcaption></figure></div>
+            <div class="thumbs" id="thumbs" style="margin-top:14px"></div>
+          </div>
+          <div class="card">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:22px;align-items:center">
+              <div><div class="kpi"><b id="fr-pct" style="font-size:44px;color:var(--rust)">—</b><span>площади листа поражено ржавчиной</span></div>
+                <div class="hint muted" style="margin-top:10px;font-size:14px" id="fr-true"></div></div>
+              <div><div class="cells" id="cells" aria-hidden="true"></div><div class="muted" style="font-size:13px;margin-top:8px">Лист разделён на 400 долей. Оранжевые — поражённые.</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)">
+              <div class="kpi"><b id="fr-conf" style="font-size:22px"></b><span>уверенность модели</span></div>
+              <div class="kpi"><b id="fr-iou" style="font-size:22px"></b><span>совпадение с разметкой эксперта</span></div>
+              <div class="kpi"><b id="fr-size" style="font-size:22px"></b><span>размер снимка, px</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="m-title"><div class="box"><h3 id="m-title"></h3><p id="m-text"></p><button class="btn primary" id="m-ok" type="button" style="align-self:flex-end">Понятно</button></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const D = /*DATA*/;
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const pct = v => Math.round(v * 100) + '%';
+/* ориентиры для слов «отлично/хорошо» — предложение для обсуждения, не научный стандарт */
+const verdict = v => v >= 0.75 ? ['Отлично', ''] : v >= 0.65 ? ['Хорошо', ''] : ['Можно лучше', 'warn'];
+
+const HELP = {
+ train:['Папка для обучения','Здесь лежат фото листьев (.jpg) и рядом маски (.png) с тем же именем. На этих снимках сеть учится. Обычно это 70–80% всех данных.'],
+ valid:['Папка для проверки','На этих снимках сеть не учится. После каждой эпохи она проверяется на них, и по результату выбирается лучшая модель. Снимки не должны повторяться в train.'],
+ test:['Папка итоговой оценки','Используется один раз после обучения для честной оценки. Можно оставить пустой. Маски необязательны: без них вы получите долю поражения, а с масками ещё и точность.'],
+ run:['Название эксперимента','Результаты каждого запуска лежат в отдельной папке с этим названием. Если оно занято, добавится номер, и старые результаты не потеряются.'],
+ size:['Подробность снимков','Все фото сжимаются до квадрата N на N (кратно 32).\n256: быстро, но мелкие пятна могут теряться.\n512: хороший баланс.\n640 и больше: детальнее, но медленно.'],
+ epochs:['Число эпох','Эпоха — один полный проход сети по всем обучающим снимкам. Слишком мало: сеть не успевает научиться. Слишком много: переобучение. Для начала 15–30.'],
+ patience:['Ранняя остановка','Если качество на проверочных фото не улучшается столько эпох подряд, обучение остановится досрочно, а лучшая модель сохранится.'],
+ aug:['Разнообразие данных','Во время обучения снимки случайно слегка меняются, и сеть реже запоминает конкретные кадры. Особенно полезно, когда снимков мало.'],
+ arch:['Тип нейросети','Unet — универсальный вариант с чёткими границами, рекомендуется для начала. FPN быстрее, границы грубее. DeepLabV3Plus хорош для крупных объектов, но тяжелее.'],
+ encoder:['Основа сети','resnet18 — самый лёгкий и быстрый. resnet34 — компромисс. resnet50 — мощнее, но требует больше памяти и времени.'],
+ pretrained:['Готовые знания (ImageNet)','Сеть стартует с весов, обученных на миллионах обычных фото, поэтому учится быстрее и точнее. Для первого запуска нужен интернет.'],
+ batch:['Фото за один шаг','Больше — стабильнее и быстрее, но нужно больше памяти. Если появилась ошибка нехватки памяти, уменьшите значение. Обычно 2–8.'],
+ lr:['Скорость обучения','Размер шага, которым сеть исправляет ошибки. Стандарт 0.001, разумный диапазон 0.0001–0.003.'],
+ dice:['Вес Dice','Ошибка складывается из BCE (по каждому пикселю) и Dice (совпадение области). 0.5 — рекомендуемое значение.'],
+ thr:['Порог уверенности','Для каждого пикселя сеть выдаёт вероятность ржавчины. Выше порога — пиксель считается поражённым. Ниже порог: находит больше, но растут ложные срабатывания. Стандарт 0.5.'],
+ seed:['Случайное зерно','Число, управляющее случайностью. При том же seed результаты почти повторяются. Измените его, чтобы оценить разброс.'],
+ device:['Где считать','Авто: использовать видеокарту NVIDIA, если она есть, иначе процессор. Выберите «Только процессор», если возникают ошибки видеокарты.']
+};
+
+/* ---------- навигация ---------- */
+const SCREENS = ['home','data','params','train','results','check'];
+function go(id){
+  if(!SCREENS.includes(id)) id = 'home';
+  SCREENS.forEach(s => $('#s-'+s).hidden = s !== id);
+  $$('.nav').forEach(n => n.getAttribute('data-go') === id ? n.setAttribute('aria-current','page') : n.removeAttribute('aria-current'));
+  if(location.hash !== '#'+id) history.replaceState(null,'','#'+id);
+  window.scrollTo(0,0);
+  if(id==='train') drawTrain();
+  if(id==='results') drawResults();
+}
+document.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]'); if(g){ go(g.dataset.go); return; }
+  const h = e.target.closest('[data-help]'); if(h){ const [t,x] = HELP[h.dataset.help]; $('#m-title').textContent=t; $('#m-text').textContent=x; $('#modal').hidden=false; $('#m-ok').focus(); return; }
+  const t = e.target.closest('[data-toast]'); if(t) toast(t.dataset.toast);
+});
+$('#m-ok').onclick = () => $('#modal').hidden = true;
+$('#modal').onclick = e => { if(e.target.id==='modal') e.target.hidden = true; };
+document.addEventListener('keydown', e => { if(e.key==='Escape') $('#modal').hidden = true; });
+let tt; function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,2600); }
+window.addEventListener('hashchange', () => go(location.hash.slice(1)));
+
+/* тема */
+$('#theme').onclick = () => {
+  const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme==='dark' : matchMedia('(prefers-color-scheme:dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+  try{ localStorage.setItem('theme', r.dataset.theme); }catch(e){}
+  drawTrain(); drawResults();
+};
+try{ const t = localStorage.getItem('theme'); if(t) document.documentElement.dataset.theme = t; }catch(e){}
+
+/* ---------- графики ---------- */
+function chart(svg, series, o){
+  const W=+svg.viewBox.baseVal.width, H=+svg.viewBox.baseVal.height, L=40, R=14, T=12, B=28;
+  const xs = i => L + (W-L-R) * (o.xmax<=1 ? 0 : i/(o.xmax-1)), ys = v => T + (H-T-B) * (1 - (v-o.ymin)/(o.ymax-o.ymin));
+  let s='';
+  for(let k=0;k<=4;k++){ const v=o.ymin+(o.ymax-o.ymin)*k/4, y=ys(v); s+=`<line class="gl" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"/><text x="${L-6}" y="${y+4}" text-anchor="end">${o.pctY?Math.round(v*100)+'%':v.toFixed(2)}</text>`; }
+  const step = o.xmax>40?10:o.xmax>20?5:o.xmax>10?2:1;
+  for(let i=0;i<o.xmax;i+=step){ s+=`<text x="${xs(i)}" y="${H-8}" text-anchor="middle">${i+1}</text>`; }
+  series.forEach(se => {
+    if(!se.data.length) return;
+    const d = se.data.map((v,i)=>`${i?'L':'M'}${xs(i).toFixed(1)} ${ys(v).toFixed(1)}`).join(' ');
+    s+=`<path d="${d}" fill="none" stroke="var(${se.color})" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const li=se.data.length-1; s+=`<circle cx="${xs(li)}" cy="${ys(se.data[li])}" r="4.5" fill="var(${se.color})" stroke="var(--surface)" stroke-width="2"/>`;
+  });
+  svg.innerHTML = s;
+}
+
+/* ---------- главная ---------- */
+const E = D.exps;
+const sizeWord = n => n>=512?'высокая':n>=384?'средняя':'низкая';
+$('#home-tbl').innerHTML = '<thead><tr><th>Эксперимент</th><th>Сеть</th><th class="num">Размер</th><th class="num">Эпох</th><th class="num">Совпадение</th></tr></thead><tbody>' +
+  E.map(e=>`<tr class="pick" data-go="results"><td><b>${e.id}</b></td><td>${e.arch} · ${e.enc}</td><td class="num mono">${e.size}</td><td class="num mono">${e.done}</td><td class="num mono"><b>${pct(e.iou)}</b></td></tr>`).join('') + '</tbody>';
+
+/* ---------- параметры ---------- */
+const PRE = {fast:{size:'256',ep:8,t:'≈ 5 мин'},bal:{size:'384',ep:25,t:'≈ 30 мин'},acc:{size:'512',ep:50,t:'≈ 2 ч'}};
+let epochs = 25;
+function sum(){ const s=$('input[name=size]:checked').value; $('#sum-size').textContent=s+' × '+s; $('#sum-ep').textContent=epochs+' эпох';
+  const m=Math.round(epochs*Math.pow(s/256,2)*0.5); $('#sum-time').textContent = m<90?'≈ '+m+' мин':'≈ '+(m/60).toFixed(1)+' ч'; $('#epochs').textContent=epochs; }
+$$('input[name=preset]').forEach(r => r.onchange = () => { const p=PRE[r.value]; epochs=p.ep; $(`input[name=size][value="${p.size}"]`).checked=true; sum(); });
+$$('input[name=size]').forEach(r => r.onchange = sum);
+$$('[data-step]').forEach(b => b.onclick = () => { epochs = Math.max(1, Math.min(200, epochs + +b.dataset.step)); sum(); });
+sum();
+$('#btn-check').onclick = () => { $('#check-out').hidden = false; };
+
+/* ---------- обучение (демо на кривых exp1) ---------- */
+const X = E[0]; let cur = 18, timer = null, running = true;
+function drawTrain(){
+  const n=cur, q=X.val_iou.slice(0,n);
+  chart($('#ch-q'),[{data:q,color:'--s1'}],{xmax:X.epochs,ymin:0,ymax:1,pctY:true});
+  chart($('#ch-l'),[{data:X.train_loss.slice(0,n),color:'--s1'},{data:X.val_loss.slice(0,n),color:'--s2'}],{xmax:X.epochs,ymin:0,ymax:0.5});
+  $('#tr-ep').textContent = cur>=X.epochs ? 'Готово: '+X.epochs+' эпох' : `Эпоха ${cur} из ${X.epochs}`;
+  const left = Math.round((X.epochs-cur)*0.6); $('#tr-eta').textContent = cur>=X.epochs?'Обучение завершено':(running?`Осталось примерно ${left} мин`:'Остановлено, лучшая модель сохранена');
+  $('#tr-bar').style.width = (cur/X.epochs*100)+'%';
+  $('#tr-bar-wrap').setAttribute('aria-valuenow', Math.round(cur/X.epochs*100));
+  $('#tr-iou').textContent = pct(q[n-1]); $('#tr-best').textContent = pct(Math.max(...q)); $('#tr-loss').textContent = X.val_loss[n-1].toFixed(3);
+  $('#tr-log').innerHTML = q.map((v,i)=>[i,v]).slice(-6).map(([i,v])=>`<div>Эпоха ${i+1} · ошибка ${X.val_loss[i].toFixed(3)} · совпадение ${pct(v)}</div>`).join('');
+  const fin = cur>=X.epochs||!running; $('#tr-stop').hidden = fin; $('#tr-done').hidden = !fin; $('#train-title').textContent = cur>=X.epochs?'Обучение завершено':(running?'Модель учится':'Обучение остановлено');
+}
+function tick(){ if(!running) return; if(cur<X.epochs){ cur++; if($('#s-train').hidden===false) drawTrain(); } else { clearInterval(timer); running=false; if(!$('#s-train').hidden) drawTrain(); } }
+timer = setInterval(tick, 1100);
+$('#tr-stop').onclick = () => { running=false; drawTrain(); };
+
+/* ---------- результаты ---------- */
+const COLORS = ['--s1','--s2','--s3']; const sel = new Set(E.map(e=>e.id));
+function drawResults(){
+  const best = E.reduce((a,b)=>b.iou>a.iou?b:a);
+  $('#res-tbl').innerHTML = '<thead><tr><th>Сравнить</th><th>Эксперимент</th><th>Модель</th><th class="num">Размер</th><th class="num">Эпох</th><th class="num">Совпадение</th><th>Оценка</th></tr></thead><tbody>' +
+   E.map((e,i)=>{ const [w,c]=verdict(e.iou); return `<tr><td><label class="toggle"><input type="checkbox" data-sel="${e.id}" ${sel.has(e.id)?'checked':''} aria-label="Сравнить ${e.id}"></label></td><td><b>${e.id}</b> ${e.id===best.id?'<span class="chip">лучший</span>':''}</td><td>${e.arch} · ${e.enc}</td><td class="num mono">${e.size}</td><td class="num mono">${e.done} из ${e.epochs}</td><td class="num mono"><b>${pct(e.iou)}</b></td><td><span class="chip ${c}">${w}</span></td></tr>`;}).join('') + '</tbody>';
+  $$('[data-sel]').forEach(c => c.onchange = () => { c.checked ? sel.add(c.dataset.sel) : sel.delete(c.dataset.sel); drawResults(); });
+  const ser = E.filter(e=>sel.has(e.id)).map(e=>({data:e.val_iou,color:COLORS[E.indexOf(e)]}));
+  chart($('#ch-cmp'),ser,{xmax:50,ymin:0,ymax:1,pctY:true});
+  $('#cmp-legend').innerHTML = E.filter(e=>sel.has(e.id)).map(e=>`<span><i style="background:var(${COLORS[E.indexOf(e)]})"></i>${e.id} · ${e.enc}, ${e.size}px</span>`).join('') || '<span class="muted">Отметьте хотя бы один эксперимент</span>';
+  $('#best-card').innerHTML = `<h3>Лучшая модель: ${best.id}</h3>
+    <div class="kpi" style="margin:14px 0"><b style="color:var(--accent);font-size:40px">${pct(best.iou)}</b><span>совпадение с разметкой эксперта на ${100} тестовых фото</span></div>
+    <div class="kpi" style="margin-bottom:14px"><b style="font-size:24px">${pct(best.dice)}</b><span>точность выделения (Dice)</span></div>
+    <p class="muted" style="font-size:14px;margin-bottom:16px">${best.arch}, ${best.enc}, снимки ${sizeWord(best.size)} подробности (${best.size}px), ${best.done} эпох.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn primary" data-go="check" type="button">Применить к фото</button><button class="btn" type="button" data-toast="Откроется папка OUT/${best.id}">Открыть папку</button></div>`;
+}
+
+/* ---------- проверка фото ---------- */
+const F = D.frames; let fi = 0;
+$('#model').innerHTML = E.map((e,i)=>`<option>${e.id} · ${pct(e.iou)} · ${e.enc}${i===2?' (лучшая)':''}</option>`).join(''); $('#model').selectedIndex = 2;
+$('#thumbs').innerHTML = F.map((f,i)=>`<button type="button" data-fr="${i}" aria-label="Кадр ${i+1}"><img src="${f.photo}" alt=""></button>`).join('');
+function drawFrame(){
+  const f=F[fi]; $('#fr-title').textContent = `Кадр ${fi+1} из ${F.length}`;
+  $('#fr-photo').src=f.photo; $('#fr-over').src=f.over;
+  $('#fr-pct').textContent = f.pct.toFixed(1).replace('.',',')+'%';
+  $('#fr-true').textContent = `По разметке эксперта: ${f.true.toFixed(1).replace('.',',')}%`;
+  $('#fr-conf').textContent = pct(f.conf); $('#fr-iou').textContent = pct(f.iou); $('#fr-size').textContent = f.w+' × '+f.h;
+  const on = Math.round(f.pct/100*400); $('#cells').innerHTML = Array.from({length:400},(_,i)=>`<i class="${i<on?'on':''}"></i>`).join('');
+  $$('#thumbs button').forEach((b,i)=>b.setAttribute('aria-pressed', i===fi));
+}
+$('#fr-prev').onclick = () => { fi=(fi-1+F.length)%F.length; drawFrame(); };
+$('#fr-next').onclick = () => { fi=(fi+1)%F.length; drawFrame(); };
+$('#thumbs').onclick = e => { const b=e.target.closest('[data-fr]'); if(b){ fi=+b.dataset.fr; drawFrame(); } };
+document.addEventListener('keydown', e => { if($('#s-check').hidden) return; if(e.key==='ArrowRight') $('#fr-next').click(); if(e.key==='ArrowLeft') $('#fr-prev').click(); });
+const dz=$('#dz'); ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('over');})); ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,()=>dz.classList.remove('over')));
+dz.addEventListener('drop',e=>{e.preventDefault(); note(e.dataTransfer.files.length);}); $('#files').onchange = e => note(e.target.files.length);
+function note(n){ const c=$('#dz-n'); c.hidden=!n; c.textContent='Выбрано файлов: '+n; }
+drawFrame();
+
+go(location.hash.slice(1) || 'home');
+</script>
