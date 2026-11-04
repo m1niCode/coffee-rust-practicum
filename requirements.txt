@@ -1,0 +1,14 @@
+# Интерфейс (веб-сервер)
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+# Вычислительное ядро
+torch
+torchvision
+segmentation-models-pytorch
+albumentations
+opencv-python-headless
+numpy
+pandas
+matplotlib
+pillow
