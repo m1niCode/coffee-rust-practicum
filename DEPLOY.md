@@ -18,7 +18,7 @@
 ## A. Из GitHub (на каждой станции, ~15–30 мин)
 
 ```bash
-git clone https://github.com/OWNER/coffee-rust-practicum.git ~/coffee && cd ~/coffee
+git clone https://github.com/m1niCode/coffee-rust-practicum.git ~/coffee && cd ~/coffee
 bash tools/download_models.sh          # модели exp1–exp3 из Release
 bash setup_ubuntu.sh                   # пакеты, окружения, мини-датасет, проверка (--cpu без NVIDIA)
 .venv/bin/python check_env.py --offline
