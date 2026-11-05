@@ -24,13 +24,13 @@ echo "== 1/6 Системные пакеты (нужен пароль sudo)"
 
 echo "== 2/6 Окружение обучения .venv"
 [ -d .venv ] || python3 -m venv .venv
-.venv/bin/python -m pip install -q --upgrade pip
+.venv/bin/python -m pip install --upgrade pip
 if [ "$CPU" = 1 ]; then
-  .venv/bin/pip install -q torch torchvision --index-url https://download.pytorch.org/whl/cpu
+  .venv/bin/pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 else
-  .venv/bin/pip install -q torch torchvision          # сборка для Linux с PyPI уже включает CUDA
+  .venv/bin/pip install torch torchvision          # сборка для Linux с PyPI уже включает CUDA
 fi
-.venv/bin/pip install -q -r requirements.txt
+.venv/bin/pip install -r requirements.txt
 
 echo "== 3/6 labelme (отдельное окружение .venv-labelme, чтобы не конфликтовать с OpenCV/Qt)"
 [ -d .venv-labelme ] || python3 -m venv .venv-labelme
