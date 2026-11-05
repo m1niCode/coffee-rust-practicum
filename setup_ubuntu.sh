@@ -17,10 +17,10 @@ for arg in "$@"; do
 done
 
 echo "== 1/6 Системные пакеты (нужен пароль sudo)"
-sudo apt-get update -qq
-sudo apt-get install -y -qq python3 python3-venv python3-pip python3-tk git \
-  libgl1 libglib2.0-0 libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0   # последние — для окна labelme (Qt)
-python3 -c 'import sys; assert sys.version_info >= (3, 10), "Нужен Python 3.10+"'
+# sudo apt-get update -qq
+# sudo apt-get install -y -qq python3 python3-venv python3-pip python3-tk git \
+#   libgl1 libglib2.0-0 libxcb-xinerama0 libxcb-cursor0 libxkbcommon-x11-0   # последние — для окна labelme (Qt)
+# python3 -c 'import sys; assert sys.version_info >= (3, 10), "Нужен Python 3.10+"'
 
 echo "== 2/6 Окружение обучения .venv"
 [ -d .venv ] || python3 -m venv .venv
