@@ -1,15 +1,19 @@
+# Модели (.pth/.pt) больше лимита GitHub — лежат в GitHub Release, скачиваются tools/download_models.sh
 *.pth
 *.pt
-*.docx
-/*/
-!/prototype/
-!/core/
-!/server/
-!/web/
-!/*.py
-!/.gitignore
-!/README.md
+
+# Копия исходников статьи и разовые результаты — в репозиторий не входят
+/reference/
+/OUT_test/
+
+# Генерируется на месте (setup_ubuntu.sh)
+/practicum/data_mini*/
+/practicum/my_*/
+.venv/
+/.venv-*/
+
 __pycache__/
 node_modules/
-.venv/
 .DS_Store
+desktop.ini
+_desktop.ini

@@ -1,0 +1,13 @@
+{
+  "ARCH": "Unet",
+  "ENCODER": "resnet18",
+  "PRETRAINED": true,
+  "IMG_SIZE": 512,
+  "EPOCHS": 50,
+  "BATCH_SIZE": 4,
+  "LR": 0.001,
+  "AUGMENT": true,
+  "DICE_WEIGHT": 0.5,
+  "THRESHOLD": 0.5,
+  "SEED": 42
+}

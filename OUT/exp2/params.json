@@ -1,0 +1,20 @@
+{
+  "ARCH": "Unet",
+  "ENCODER": "resnet18",
+  "PRETRAINED": true,
+  "IMG_SIZE": 384,
+  "EPOCHS": 10,
+  "BATCH_SIZE": 21,
+  "LR": 0.001,
+  "AUGMENT": true,
+  "AUG_FLIP": true,
+  "AUG_ROT90": true,
+  "AUG_BRIGHT": true,
+  "DICE_WEIGHT": 0.5,
+  "THRESHOLD": 0.9,
+  "SEED": 42,
+  "PATIENCE": 8,
+  "train_dir": "C:\\Users\\Us\\.spyder-py3\\Work\\kofi\\train",
+  "valid_dir": "C:\\Users\\Us\\.spyder-py3\\Work\\kofi\\valid",
+  "test_dir": "C:\\Users\\Us\\.spyder-py3\\Work\\kofi\\test"
+}

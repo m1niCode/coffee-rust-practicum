@@ -1,0 +1,11 @@
+# 500_IMG > 2026-01-07 2:52pm
+https://universe.roboflow.com/clr-zky50/500_img-h38ko
+
+Provided by a Roboflow user
+License: CC BY 4.0
+
+
+Папки train/, valid/, test/ этого репозитория — копия датасета выше (Roboflow, CC BY 4.0),
+без изменений. Исходная работа и модели: https://github.com/MaryPazRB/paper_CLR_CV
+Лицензия CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ — использование и распространение
+разрешены с указанием источника.

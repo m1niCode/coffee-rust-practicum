@@ -1,0 +1,12 @@
+<!-- Label Studio: Settings -> Labeling Interface -> Code. Вставьте целиком и нажмите Save.
+     Два инструмента на один класс: полигон (P) и кисть (B). Ластик кисти — E. -->
+<View>
+  <Header value="Обведите все пятна ржавчины на листе. Здоровый лист — просто Submit без разметки."/>
+  <Image name="image" value="$image" zoom="true" zoomControl="true" brightnessControl="true"/>
+  <PolygonLabels name="poly" toName="image" strokeWidth="2" pointSize="small" opacity="0.4">
+    <Label value="rust" background="#ff6a00"/>
+  </PolygonLabels>
+  <BrushLabels name="brush" toName="image">
+    <Label value="rust" background="#ff6a00"/>
+  </BrushLabels>
+</View>
