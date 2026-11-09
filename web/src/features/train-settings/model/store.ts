@@ -3,9 +3,6 @@ import { create } from 'zustand';
 export type PresetId = 'fast' | 'bal' | 'acc';
 
 export interface Settings {
-  train_dir: string;
-  valid_dir: string;
-  test_dir: string;
   run_name: string;
   preset: PresetId;
   img_size: number;
@@ -42,7 +39,7 @@ interface State extends Settings {
 }
 
 const initial: Settings = {
-  train_dir: '', valid_dir: '', test_dir: '', run_name: 'exp', preset: 'bal',
+  run_name: 'exp', preset: 'bal',
   img_size: 384, epochs: 25, early: true, patience: 8, flip: true, rot: true, bright: true,
   arch: 'Unet', encoder: 'resnet18', pretrained: true, batch: 4, lr: 0.001, dice_w: 0.5, thr: 0.5, seed: 42, device: 'auto',
 };
@@ -56,7 +53,7 @@ export const useSettings = create<State>((set) => ({
 /** Тело запроса /api/training/start. */
 export function toRequest(s: Settings) {
   return {
-    train_dir: s.train_dir, valid_dir: s.valid_dir, test_dir: s.test_dir, run_name: s.run_name,
+    run_name: s.run_name,
     arch: s.arch, encoder: s.encoder, pretrained: s.pretrained, img_size: s.img_size, epochs: s.epochs,
     batch: s.batch, lr: s.lr, flip: s.flip, rot: s.rot, bright: s.bright, dice_w: s.dice_w, thr: s.thr,
     patience: s.early ? s.patience : 0, seed: s.seed, device: s.device,

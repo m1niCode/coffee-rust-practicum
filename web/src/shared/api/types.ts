@@ -15,6 +15,8 @@ export interface Experiment {
   curves: { val_iou: number[]; train_loss: number[]; val_loss: number[] };
   has_model: boolean;
   modified: number;
+  /** Готовая модель, общая для всех. Только для чтения. */
+  shared: boolean;
 }
 
 export interface FolderInfo {
@@ -41,16 +43,22 @@ export interface EpochRow {
   val_dice: number;
 }
 
-export type TrainStatus = 'idle' | 'running' | 'stopping' | 'done' | 'error';
+export type TrainStatus = 'idle' | 'queued' | 'running' | 'stopping' | 'done' | 'error';
 
 export interface TrainSnapshot {
   status: TrainStatus;
   progress: number;
   total_epochs: number;
   epochs: EpochRow[];
-  run_dir: string | null;
+  run_id: string | null;
   error: string | null;
   eta_seconds: number | null;
+  queue_ahead: number;
+}
+
+export interface UploadResult {
+  saved: { train: number; valid: number; test: number };
+  skipped: number;
 }
 
 export interface TrainEvent {
@@ -79,7 +87,6 @@ export interface AnalyzeResponse {
 }
 
 export interface AppInfo {
-  out_dir: string;
-  base_dir: string;
   device: 'cpu' | 'cuda';
+  max_upload_mb: number;
 }

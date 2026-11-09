@@ -20,14 +20,10 @@ export function ParamsPage() {
   const start = useTraining((t) => t.start);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const running = status === 'running' || status === 'stopping';
+  const running = status === 'queued' || status === 'running' || status === 'stopping';
 
   const begin = async () => {
     setErr(null);
-    if (!s.train_dir.trim() || !s.valid_dir.trim()) {
-      setErr('Сначала укажите папки train и valid на шаге «Данные».');
-      return;
-    }
     setBusy(true);
     try { await start(toRequest(s)); go('train'); }
     catch (e) { setErr(e instanceof Error ? e.message : 'Не удалось начать обучение.'); }

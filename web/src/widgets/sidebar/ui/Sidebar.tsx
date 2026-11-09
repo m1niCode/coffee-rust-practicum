@@ -1,4 +1,5 @@
 import { ThemeToggle } from '@/features/theme-toggle/ui/ThemeToggle';
+import { useSession } from '@/entities/session/model/store';
 import { useExperiments } from '@/entities/experiment/model/store';
 import { go, type Route } from '@/shared/lib/route';
 
@@ -11,6 +12,7 @@ const Item = ({ to, cur, n, children }: { to: Route; cur: Route; n?: number; chi
 
 export function Sidebar({ route }: { route: Route }) {
   const device = useExperiments((s) => s.info?.device);
+  const { required, logout } = useSession();
   return (
     <aside className="side" aria-label="Навигация">
       <div className="brand">
@@ -35,6 +37,7 @@ export function Sidebar({ route }: { route: Route }) {
           <span className="chip mute">{device === 'cuda' ? 'Видеокарта' : 'Процессор'}</span>
         </div>
         <ThemeToggle />
+        {required && <button className="btn" type="button" onClick={() => void logout()}>Выйти</button>}
       </div>
     </aside>
   );

@@ -1,59 +1,88 @@
 # -*- coding: utf-8 -*-
-"""Веб-сервер приложения: API для интерфейса и раздача собранной папки web/dist."""
+"""Веб-сервер: API для интерфейса и раздача собранной папки web/dist.
+
+Клиент-серверный режим: данные загружаются на сервер, обучение идёт в общей очереди,
+результаты скачиваются. Работает как в корне сайта, так и под префиксом (RUST_BASE_PATH).
+"""
 import asyncio
 import base64
 import csv
 import io
 import json
 import os
-import subprocess
-import sys
+import shutil
+import tempfile
+import time
 import uuid
 from typing import List, Literal, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from core.experiments import list_experiments, load_experiment, model_file
-from .training import manager
+from . import config, security, uploads
+from .security import KINDS, current_ws, data_dir, out_dir, require_auth
+from .training import get_manager
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT_DIR = os.environ.get("RUST_OUT_DIR", os.path.join(BASE_DIR, "OUT"))
-DIST_DIR = os.path.join(BASE_DIR, "web", "dist")
+SHARED = "shared:"
+MAX_PHOTOS_PER_CHECK = 50
+MAX_PHOTO_BYTES = 40 * 1024 * 1024
 
-app = FastAPI(title="Ржавчина на листьях")
+class StripPrefix:
+    """Срезает префикс (RUST_BASE_PATH) из адреса, если прокси передал его как есть.
+    Если прокси префикс уже отрезал, адрес не меняется. Так работают обе схемы настройки."""
 
+    def __init__(self, inner, prefix):
+        self.inner, self.prefix = inner, prefix
 
-# ---------------------------------------------------------------- данные
-class Folders(BaseModel):
-    train: str = ""
-    valid: str = ""
-    test: str = ""
-
-
-@app.post("/api/data/check")
-def data_check(f: Folders):
-    from core.data import check_folders  # cv2 нужен только здесь
-    return check_folders(f.train.strip(), f.valid.strip(), f.test.strip())
-
-
-@app.post("/api/browse-folder")
-def browse_folder():
-    """Диалог выбора папки на стороне Python. Запускается отдельным процессом, чтобы не мешать серверу."""
-    code = ("import tkinter as tk\nfrom tkinter import filedialog\nr=tk.Tk();r.withdraw();r.attributes('-topmost',True)\n"
-            "print(filedialog.askdirectory(title='Выберите папку') or '', end='')")
-    try:
-        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=300)
-    except subprocess.TimeoutExpired:
-        return {"path": ""}
-    if out.returncode != 0:
-        raise HTTPException(500, "Не удалось открыть окно выбора папки. Впишите путь вручную.")
-    return {"path": out.stdout.strip()}
+    async def __call__(self, scope, receive, send):
+        p = self.prefix
+        if p and scope["type"] in ("http", "websocket"):
+            path = scope["path"]
+            if path == p or path.startswith(p + "/"):
+                scope = dict(scope, path=path[len(p):] or "/",
+                             raw_path=(scope.get("raw_path") or path.encode())[len(p):] or b"/")
+        await self.inner(scope, receive, send)
 
 
-@app.get("/api/info")
+app = FastAPI(title="Ржавчина на листьях", docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(StripPrefix, prefix=config.BASE_PATH)
+api = APIRouter(prefix="/api")
+protected = APIRouter(prefix="/api", dependencies=[Depends(require_auth)])
+
+
+# ---------------------------------------------------------------- вход
+class Login(BaseModel):
+    token: str = ""
+
+
+@api.get("/auth")
+def auth_state(request: Request, response: Response, ws: str = Depends(current_ws)):
+    return {"required": security.auth_required(), "authed": security.is_authed(request)}
+
+
+@api.post("/login")
+def login(body: Login, request: Request, response: Response, ws: str = Depends(current_ws)):
+    if not security.auth_required():
+        return {"ok": True}
+    if not security.token_ok(body.token):
+        time.sleep(1)                      # замедляем перебор
+        raise HTTPException(401, "Неверный токен доступа.")
+    security.set_auth_cookie(request, response)
+    return {"ok": True}
+
+
+@api.post("/logout")
+def logout(response: Response):
+    security.clear_auth_cookie(response)
+    return {"ok": True}
+
+
+@protected.get("/info")
 def info():
     device = "cpu"
     try:
@@ -61,32 +90,100 @@ def info():
         device = "cuda" if torch.cuda.is_available() else "cpu"
     except Exception:
         pass
-    return {"out_dir": OUT_DIR, "base_dir": BASE_DIR, "device": device}
+    return {"device": device, "max_upload_mb": config.MAX_UPLOAD // 2**20}
+
+
+# ---------------------------------------------------------------- данные
+@protected.post("/data/upload")
+async def data_upload(request: Request, kind: str = Form(...), files: List[UploadFile] = File(...),
+                      ws: str = Depends(current_ws)):
+    """Загрузка фото и масок (.jpg, .png) или zip-архива. kind: train, valid, test или auto."""
+    length = int(request.headers.get("content-length") or 0)
+    if length > config.MAX_UPLOAD + 1024 * 1024:
+        raise HTTPException(413, "Слишком большая загрузка (больше %d МБ). Разбейте её на части." % (config.MAX_UPLOAD // 2**20))
+    items = [(f.filename or "", f.file) for f in files]
+    return await run_in_threadpool(uploads.save_uploads, ws, kind, items)
+
+
+@protected.post("/data/check")
+def data_check(ws: str = Depends(current_ws)):
+    from core.data import check_folders  # cv2 нужен только здесь
+    return check_folders(*(data_dir(ws, k) for k in KINDS))
+
+
+class ClearRequest(BaseModel):
+    kind: Literal["train", "valid", "test"]
+
+
+@protected.post("/data/clear")
+def data_clear(body: ClearRequest, ws: str = Depends(current_ws)):
+    if get_manager(ws).active():
+        raise HTTPException(409, "Идёт обучение. Дождитесь его конца или остановите.")
+    uploads.clear_kind(ws, body.kind)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- эксперименты
-@app.get("/api/experiments")
-def experiments():
-    return list_experiments(OUT_DIR)
+def _safe(name):
+    return bool(name) and os.path.basename(name) == name and name not in (".", "..") and "\\" not in name
 
 
-@app.post("/api/experiments/{name}/open-folder")
-def open_experiment_folder(name: str):
-    path = os.path.join(OUT_DIR, name)
-    if not os.path.isdir(path) or os.path.dirname(os.path.abspath(path)) != os.path.abspath(OUT_DIR):
-        raise HTTPException(404, "Папка эксперимента не найдена.")
-    if sys.platform.startswith("win"):
-        os.startfile(path)  # type: ignore[attr-defined]
+def _resolve(ws, ident):
+    """Папка эксперимента по его id. Свои лежат в рабочем пространстве, готовые общие имеют префикс shared:."""
+    if ident.startswith(SHARED):
+        base, name = config.SHARED_OUT_DIR, ident[len(SHARED):]
     else:
-        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", path])
+        base, name = out_dir(ws), ident
+    if not _safe(name):
+        return None, None
+    path = os.path.join(base, name)
+    return (base, name) if os.path.isdir(path) else (None, None)
+
+
+@protected.get("/experiments")
+def experiments(ws: str = Depends(current_ws)):
+    own = [dict(e, shared=False) for e in list_experiments(out_dir(ws))]
+    shared = [dict(e, id=SHARED + e["id"], shared=True) for e in list_experiments(config.SHARED_OUT_DIR)]
+    return sorted(own + shared, key=lambda e: e["modified"], reverse=True)
+
+
+def _run_path(ws, ident):
+    base, name = _resolve(ws, ident)
+    if not base:
+        raise HTTPException(404, "Эксперимент не найден.")
+    return os.path.join(base, name), name
+
+
+@protected.get("/experiments/{ident}/download")
+def experiment_download(ident: str, ws: str = Depends(current_ws)):
+    """Все результаты эксперимента одним zip: модель, метрики, графики."""
+    path, name = _run_path(ws, ident)
+    tmp = tempfile.mkdtemp(prefix="rust_zip_")
+    archive = shutil.make_archive(os.path.join(tmp, name), "zip", root_dir=os.path.dirname(path), base_dir=name)
+    return FileResponse(archive, media_type="application/zip", filename=name + ".zip",
+                        background=BackgroundTask(shutil.rmtree, tmp, True))
+
+
+@protected.get("/experiments/{ident}/model")
+def experiment_model(ident: str, ws: str = Depends(current_ws)):
+    path, name = _run_path(ws, ident)
+    mf = model_file(path)
+    if not mf:
+        raise HTTPException(404, "У эксперимента нет файла модели (.pth).")
+    return FileResponse(mf, media_type="application/octet-stream", filename=name + ".pth")
+
+
+@protected.delete("/experiments/{ident}")
+def experiment_delete(ident: str, ws: str = Depends(current_ws)):
+    if ident.startswith(SHARED):
+        raise HTTPException(403, "Готовые общие модели удалять нельзя.")
+    path, _name = _run_path(ws, ident)
+    shutil.rmtree(path, ignore_errors=True)
     return {"ok": True}
 
 
 # ---------------------------------------------------------------- обучение
 class TrainRequest(BaseModel):
-    train_dir: str
-    valid_dir: str
-    test_dir: str = ""
     run_name: str = "exp"
     arch: Literal["Unet", "FPN", "DeepLabV3Plus"] = "Unet"
     encoder: Literal["resnet18", "resnet34", "resnet50"] = "resnet18"
@@ -105,21 +202,26 @@ class TrainRequest(BaseModel):
     device: Literal["auto", "cpu"] = "auto"
 
 
-@app.post("/api/training/start")
-def training_start(r: TrainRequest):
+@protected.post("/training/start")
+def training_start(r: TrainRequest, ws: str = Depends(current_ws)):
+    from core.data import find_pairs
     if r.img_size % 32:
         raise HTTPException(422, "Размер изображения должен быть кратен 32.")
-    if not os.path.isdir(r.train_dir) or not os.path.isdir(r.valid_dir):
-        raise HTTPException(422, "Папки train и valid не найдены. Проверьте их на шаге «Данные».")
-    if r.test_dir and not os.path.isdir(r.test_dir):
-        raise HTTPException(422, "Папка test не найдена. Укажите её или очистите поле.")
+    train_dir, valid_dir, test_dir = (data_dir(ws, k) for k in KINDS)
+    for label, d in (("для обучения", train_dir), ("для проверки", valid_dir)):
+        if not os.path.isdir(d) or not find_pairs(d):
+            raise HTTPException(422, "Нет загруженных пар «фото + маска» %s. Загрузите их на шаге «Данные»." % label)
     run = r.run_name.strip() or "exp"
-    for ch in '<>:"/\\|?*':
+    for ch in '<>:"/\\|?*.':
         run = run.replace(ch, "_")
-    cfg = dict(train_dir=r.train_dir, valid_dir=r.valid_dir, test_dir=r.test_dir, out_dir=OUT_DIR, run_name=run,
-               arch=r.arch, encoder=r.encoder, pretrained=r.pretrained, img_size=r.img_size, epochs=r.epochs,
-               batch=r.batch, lr=r.lr, aug=dict(flip=r.flip, rot=r.rot, bright=r.bright), dice_w=r.dice_w,
-               thr=r.thr, patience=r.patience, seed=r.seed, device=r.device)
+    out = out_dir(ws)
+    os.makedirs(out, exist_ok=True)
+    has_test = os.path.isdir(test_dir) and bool(find_pairs(test_dir, need_mask=False))
+    cfg = dict(train_dir=train_dir, valid_dir=valid_dir, test_dir=test_dir if has_test else "", out_dir=out,
+               run_name=run, arch=r.arch, encoder=r.encoder, pretrained=r.pretrained, img_size=r.img_size,
+               epochs=r.epochs, batch=r.batch, lr=r.lr, aug=dict(flip=r.flip, rot=r.rot, bright=r.bright),
+               dice_w=r.dice_w, thr=r.thr, patience=r.patience, seed=r.seed, device=r.device)
+    manager = get_manager(ws)
     try:
         manager.start(cfg)
     except RuntimeError as e:
@@ -129,37 +231,41 @@ def training_start(r: TrainRequest):
     return manager.snapshot()
 
 
-@app.post("/api/training/stop")
-def training_stop():
+@protected.post("/training/stop")
+def training_stop(ws: str = Depends(current_ws)):
+    manager = get_manager(ws)
     manager.stop()
     return manager.snapshot()
 
 
-@app.get("/api/training/state")
-def training_state():
-    return manager.snapshot()
+@protected.get("/training/state")
+def training_state(ws: str = Depends(current_ws)):
+    return get_manager(ws).snapshot()
 
 
-@app.get("/api/training/events")
-async def training_events(after: int = -1):
+@protected.get("/training/events")
+async def training_events(after: int = -1, ws: str = Depends(current_ws)):
     """Поток событий (SSE). after - номер последнего уже полученного события."""
+    manager = get_manager(ws)
+
     async def gen():
         last = after
         while True:
             while last + 1 < len(manager.events):
                 last += 1
                 yield "data: %s\n\n" % json.dumps(manager.events[last], ensure_ascii=False)
-            yield "event: state\ndata: %s\n\n" % json.dumps({"status": manager.status, "progress": manager.progress,
-                                                            "eta_seconds": manager.snapshot()["eta_seconds"]})
+            yield "event: state\ndata: %s\n\n" % json.dumps(manager.light())
             if manager.status in ("done", "error", "idle") and last + 1 >= len(manager.events):
                 return
             await asyncio.sleep(0.7)
-    return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ---------------------------------------------------------------- применение модели
 _models = {}
-_sessions = {}
+_sessions = {}     # id проверки -> (рабочее пространство, строки)
+_infer_lock = asyncio.Lock()
 
 
 def _data_url(rgb, max_side=900):
@@ -172,44 +278,55 @@ def _data_url(rgb, max_side=900):
     return "data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode()
 
 
-@app.post("/api/inference/analyze")
-async def analyze_photos(experiment: str = Form(...), threshold: Optional[float] = Form(None),
-                         files: List[UploadFile] = File(...)):
+def _analyze_all(path, threshold, blobs):
     import cv2
     import numpy as np
     from core.inference import RustModel, analyze
 
-    run_dir = os.path.join(OUT_DIR, experiment)
-    path = model_file(run_dir) if os.path.isdir(run_dir) else None
-    if not path:
-        raise HTTPException(404, "У эксперимента нет файла модели (.pth).")
     key = (path, threshold)
     if key not in _models:
         _models.clear()
         _models[key] = RustModel(path, threshold)
     model = _models[key]
-
     results = []
-    for up in files:
-        data = await up.read()
+    for filename, data in blobs:
         bgr = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
         if bgr is None:
-            raise HTTPException(422, "Файл %s не удалось прочитать как фото." % up.filename)
+            raise HTTPException(422, "Файл %s не удалось прочитать как фото." % filename)
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         rec, _pred, overlay = analyze(model, rgb)
-        rec = dict(rec, file=up.filename, photo=_data_url(rgb), overlay=_data_url(overlay))
-        results.append(rec)
+        results.append(dict(rec, file=filename, photo=_data_url(rgb), overlay=_data_url(overlay)))
+    return model.threshold, results
+
+
+@protected.post("/inference/analyze")
+async def analyze_photos(experiment: str = Form(...), threshold: Optional[float] = Form(None),
+                         files: List[UploadFile] = File(...), ws: str = Depends(current_ws)):
+    run_path, _name = _run_path(ws, experiment)
+    path = model_file(run_path)
+    if not path:
+        raise HTTPException(404, "У эксперимента нет файла модели (.pth).")
+    if len(files) > MAX_PHOTOS_PER_CHECK:
+        raise HTTPException(413, "За один раз можно проверить не больше %d фото." % MAX_PHOTOS_PER_CHECK)
+    blobs = []
+    for up in files:
+        data = await up.read(MAX_PHOTO_BYTES + 1)
+        if len(data) > MAX_PHOTO_BYTES:
+            raise HTTPException(413, "Файл %s слишком большой." % up.filename)
+        blobs.append((up.filename, data))
+    async with _infer_lock:                      # модель в кэше одна, обрабатываем по очереди
+        thr, results = await run_in_threadpool(_analyze_all, path, threshold, blobs)
     sid = uuid.uuid4().hex
-    _sessions[sid] = results
-    for old in list(_sessions)[:-5]:
+    _sessions[sid] = (ws, results)
+    for old in list(_sessions)[:-20]:
         _sessions.pop(old, None)
-    return {"session": sid, "threshold": model.threshold, "results": results}
+    return {"session": sid, "threshold": thr, "results": results}
 
 
-@app.get("/api/inference/{sid}/results.csv")
-def results_csv(sid: str):
-    rows = _sessions.get(sid)
-    if rows is None:
+@protected.get("/inference/{sid}/results.csv")
+def results_csv(sid: str, ws: str = Depends(current_ws)):
+    owner, rows = _sessions.get(sid, (None, None))
+    if rows is None or owner != ws:
         raise HTTPException(404, "Результаты устарели. Загрузите фото заново.")
     cols = ["file", "width", "height", "rust_pred_pct", "rust_pred_pixels", "mean_confidence", "max_probability"]
     buf = io.StringIO()
@@ -221,19 +338,22 @@ def results_csv(sid: str):
                     headers={"Content-Disposition": 'attachment; filename="results.csv"'})
 
 
+app.include_router(api)
+app.include_router(protected)
+
 # ---------------------------------------------------------------- интерфейс (сборка web/dist)
-if os.path.isdir(os.path.join(DIST_DIR, "assets")):
-    app.mount("/assets", StaticFiles(directory=os.path.join(DIST_DIR, "assets")), name="assets")
+if os.path.isdir(os.path.join(config.DIST_DIR, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(config.DIST_DIR, "assets")), name="assets")
 
 
 @app.get("/{path:path}", include_in_schema=False)
 def spa(path: str):
-    index = os.path.join(DIST_DIR, "index.html")
+    index = os.path.join(config.DIST_DIR, "index.html")
     if path.startswith("api/"):
         raise HTTPException(404)
     if not os.path.exists(index):
         return JSONResponse({"detail": "Интерфейс не собран. Выполните: cd web && npm install && npm run build"}, 503)
-    candidate = os.path.normpath(os.path.join(DIST_DIR, path))
-    if path and candidate.startswith(DIST_DIR) and os.path.isfile(candidate):
+    candidate = os.path.normpath(os.path.join(config.DIST_DIR, path))
+    if path and candidate.startswith(config.DIST_DIR) and os.path.isfile(candidate):
         return FileResponse(candidate)
     return FileResponse(index)

@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useExperiments } from '@/entities/experiment/model/store';
 import { useTraining } from '@/entities/training/model/store';
-import { useSettings } from '@/features/train-settings/model/store';
+import { useSession } from '@/entities/session/model/store';
+import { LoginForm } from '@/features/login/ui/LoginForm';
 import { CheckPage } from '@/pages/check/ui/CheckPage';
 import { DataPage } from '@/pages/data/ui/DataPage';
 import { HomePage } from '@/pages/home/ui/HomePage';
@@ -19,18 +20,17 @@ export function App() {
   const load = useExperiments((s) => s.load);
   const attach = useTraining((s) => s.attach);
 
+  const { checked, required, authed, check } = useSession();
+
+  useEffect(() => { void check(); }, [check]);
   useEffect(() => {
-    void load().then(() => {
-      // по умолчанию папки данных лежат рядом с программой
-      const base = useExperiments.getState().info?.base_dir;
-      const s = useSettings.getState();
-      if (base && !s.train_dir) {
-        const sep = base.includes('\\') ? '\\' : '/';
-        s.set({ train_dir: base + sep + 'train', valid_dir: base + sep + 'valid', test_dir: base + sep + 'test' });
-      }
-    });
+    if (!checked || !authed) return;
+    void load();
     void attach();
-  }, [load, attach]);
+  }, [checked, authed, load, attach]);
+
+  if (!checked) return null;
+  if (required && !authed) return <LoginForm />;
 
   const Page = PAGES[route];
   return (

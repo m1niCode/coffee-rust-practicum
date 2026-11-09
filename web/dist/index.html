@@ -3,12 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script>
+    // /kofi без слэша: относительные пути (assets, api) нужно считать от /kofi/
+    if (!/\/$/.test(location.pathname) && !/\.html$/.test(location.pathname)) {
+      document.write('<base href="' + location.pathname + '/">');
+    }
+  </script>
   <title>Ржавчина на листьях</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232b7a4b' stroke-width='2' stroke-linecap='round'><path d='M5 19C5 10 10 5 20 4c0 10-5 15-14 15'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
-  <script type="module" crossorigin src="/assets/index-DntJlYgH.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-CYE9GVrV.css">
+  <script type="module" crossorigin src="./assets/index-XBmjUaND.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CYE9GVrV.css">
 </head>
 <body>
   <div id="root"></div>

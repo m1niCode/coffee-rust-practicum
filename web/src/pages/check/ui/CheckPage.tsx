@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useExperiments } from '@/entities/experiment/model/store';
 import { useAnalyze } from '@/features/analyze-photos/model/store';
+import { apiUrl } from '@/shared/api/client';
 import { go } from '@/shared/lib/route';
 import { pct, pct1 } from '@/shared/lib/format';
 import { HelpButton } from '@/shared/ui/help';
@@ -50,7 +51,7 @@ export function CheckPage() {
               <div className="field" style={{ paddingTop: 0 }}>
                 <div className="lbl">Модель</div>
                 <select className="in" value={a.experiment} onChange={(e) => { a.setExperiment(e.target.value); setChanged(true); }} aria-label="Модель">
-                  {items.map((e) => <option key={e.id} value={e.id}>{e.id} · {pct(e.test_iou ?? e.best_val_iou)} · {e.encoder}</option>)}
+                  {items.map((e) => <option key={e.id} value={e.id}>{e.id.replace(/^shared:/, '')}{e.shared ? ' (готовая)' : ''} · {pct(e.test_iou ?? e.best_val_iou)} · {e.encoder}</option>)}
                 </select>
               </div>
               <div className="field" style={{ border: 0, paddingBottom: 0 }}>
@@ -71,7 +72,7 @@ export function CheckPage() {
               <b>{a.busy ? 'Обрабатываем…' : 'Перетащите фото сюда'}</b>
               <span className="muted">или нажмите, чтобы выбрать файлы .jpg</span>
             </label>
-            {a.session && <a className="btn" href={`/api/inference/${a.session}/results.csv`}>Сохранить таблицу (CSV)</a>}
+            {a.session && <a className="btn" href={apiUrl(`/inference/${a.session}/results.csv`)}>Сохранить таблицу (CSV)</a>}
             <ErrorBox text={a.error} />
           </div>
           <div className="stack" style={{ minWidth: 0 }}>

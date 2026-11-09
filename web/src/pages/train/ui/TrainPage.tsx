@@ -27,19 +27,22 @@ export function TrainPage() {
   const finished = t.status === 'done' || t.status === 'error';
   const title = t.status === 'done' ? 'Обучение завершено'
     : t.status === 'error' ? 'Обучение прервано ошибкой'
-    : t.status === 'stopping' ? 'Останавливаем…' : 'Модель учится';
+    : t.status === 'stopping' ? 'Останавливаем…'
+    : t.status === 'queued' ? 'Ждём своей очереди' : 'Модель учится';
   const epochNow = Math.min(total, last ? last.epoch : 0);
 
   return (
     <section>
       <PageHead step="Шаг 3 из 4" title={title}>
-        Окно можно не закрывать и заняться другим. Лучшая версия сохраняется автоматически.
+        Обучение идёт на сервере, окно можно закрыть и вернуться позже. Лучшая версия сохраняется автоматически.
       </PageHead>
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'end', marginBottom: 12 }}>
           <div className="kpi">
-            <b>{t.status === 'done' ? `Готово: ${t.epochs.length} эпох` : `Эпоха ${epochNow} из ${total}`}</b>
-            <span>{finished ? (t.status === 'done' ? 'Результаты сохранены' : 'Подробности в журнале ниже') : `Осталось ${minutes(t.etaSeconds)}`}</span>
+            <b>{t.status === 'done' ? `Готово: ${t.epochs.length} эпох` : t.status === 'queued' ? 'В очереди' : `Эпоха ${epochNow} из ${total}`}</b>
+            <span>{finished ? (t.status === 'done' ? 'Результаты сохранены' : 'Подробности в журнале ниже')
+              : t.status === 'queued' ? (t.queueAhead > 0 ? `Впереди обучений: ${t.queueAhead}. Страницу можно закрыть: очередь не потеряется.` : 'Сейчас начнётся')
+              : `Осталось ${minutes(t.etaSeconds)}`}</span>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {!finished && <button className="btn danger" type="button" onClick={() => void t.stop()} disabled={t.status === 'stopping'}>Остановить</button>}
