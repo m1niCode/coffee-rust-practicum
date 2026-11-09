@@ -88,6 +88,8 @@ export interface AnalyzeResponse {
 
 export interface AppInfo {
   device: 'cpu' | 'cuda';
+  gpu_name: string | null;
+  gpu_memory_gb: number | null;
   max_upload_mb: number;
   /** Локальный режим для занятий: данные берутся из папок на этом компьютере. */
   local_paths: boolean;

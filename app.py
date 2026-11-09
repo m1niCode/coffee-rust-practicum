@@ -26,6 +26,11 @@ def main():
         print("ВНИМАНИЕ: включён RUST_ALLOW_LOCAL_PATHS, а сервер доступен по сети: пользователи смогут читать любые папки на этом компьютере.")
     if config.HOST not in ("127.0.0.1", "localhost", "::1") and not config.TOKEN:
         print("ВНИМАНИЕ: сервер доступен по сети, а RUST_TOKEN не задан. Любой, кто знает адрес, сможет им пользоваться.")
+    try:
+        import torch
+        print("Вычисления:", "видеокарта " + torch.cuda.get_device_name(0) if torch.cuda.is_available() else "процессор")
+    except Exception:
+        pass
     print("Приложение запущено: %s  (остановить: Ctrl+C)" % url)
     uvicorn.run("server.app:app", host=config.HOST, port=config.PORT, log_level="warning",
                 proxy_headers=True, forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1"))

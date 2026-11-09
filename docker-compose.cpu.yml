@@ -1,0 +1,20 @@
+# Сервер без видеокарты (обучение на процессоре, в десятки раз медленнее):
+#   docker compose -f docker-compose.cpu.yml up -d --build
+services:
+  rust:
+    build:
+      context: .
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cpu
+    restart: unless-stopped
+    environment:
+      RUST_TOKEN: ${RUST_TOKEN:?задайте RUST_TOKEN в .env}
+      RUST_BASE_PATH: ${RUST_BASE_PATH:-}
+      RUST_MAX_PARALLEL: ${RUST_MAX_PARALLEL:-1}
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - rust-data:/data
+      - ./OUT:/models:ro
+volumes:
+  rust-data:

@@ -65,11 +65,27 @@ location /kofi/ {
 | `RUST_DATA_DIR` | рабочие папки пользователей (по умолчанию `data/`, в Docker `/data`) |
 | `RUST_OUT_DIR` | готовые общие модели, только чтение (по умолчанию `OUT/`) |
 | `RUST_MAX_PARALLEL` | сколько обучений одновременно (1) |
+| `RUST_REQUIRE_GPU` | `1`: не начинать обучение без видеокарты (в `docker-compose.yml` включено) |
 | `RUST_MAX_UPLOAD_MB`, `RUST_MAX_WORKSPACE_MB` | лимит одной загрузки (1024) и данных одного пользователя (4096) |
 | `RUST_ALLOW_LOCAL_PATHS` | `1`: локальный режим, см. ниже |
 | `HOST`, `PORT` | адрес сервера (по умолчанию `127.0.0.1:8765`) |
 
-Docker-образ учит на процессоре. Для видеокарты соберите с `--build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu126` и запускайте с доступом к GPU.
+### Видеокарта (GPU)
+
+По умолчанию образ собирается с torch под CUDA 12.9, и `docker-compose.yml` отдаёт контейнеру одну видеокарту NVIDIA.
+На хосте нужны только драйвер NVIDIA (525 и новее) и [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html); CUDA ставить не нужно, она входит в образ (он весит около 8 ГБ).
+
+Проверить, что карта видна контейнеру:
+
+```bash
+docker compose exec rust python -c "import torch; print(torch.cuda.get_device_name(0))"
+```
+
+В интерфейсе внизу слева будет написано «Видеокарта» и её название. Если карта недоступна, обучение не стартует и пользователь видит сообщение (`RUST_REQUIRE_GPU=1` в compose), а не тихо уходит на процессор.
+
+- Старая карта или драйвер: `TORCH_INDEX=https://download.pytorch.org/whl/cu126` в `.env`. Драйвер 580 и новее: `.../whl/cu130`.
+- Сервер без видеокарты: `docker compose -f docker-compose.cpu.yml up -d --build` (образ около 2 ГБ, обучение на процессоре).
+- Используется одна карта (первая). `RUST_MAX_PARALLEL` оставьте равным 1: два обучения одновременно делят память карты и могут упасть с нехваткой памяти. Если видеопамяти не хватает, уменьшите размер изображения или batch на шаге «Параметры».
 Личные пространства сами не удаляются: старые папки в `RUST_DATA_DIR/workspaces/` чистите вручную.
 
 ### Занятия на своём компьютере (папки вместо загрузки)

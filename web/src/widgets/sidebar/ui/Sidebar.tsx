@@ -11,7 +11,8 @@ const Item = ({ to, cur, n, children }: { to: Route; cur: Route; n?: number; chi
 );
 
 export function Sidebar({ route }: { route: Route }) {
-  const device = useExperiments((s) => s.info?.device);
+  const info = useExperiments((s) => s.info);
+  const device = info?.device;
   const { required, logout } = useSession();
   return (
     <aside className="side" aria-label="Навигация">
@@ -36,6 +37,7 @@ export function Sidebar({ route }: { route: Route }) {
           <span>Вычисления</span>
           <span className="chip mute">{device === 'cuda' ? 'Видеокарта' : 'Процессор'}</span>
         </div>
+        {info?.gpu_name && <div className="muted hide-m" style={{ fontSize: 12 }}>{info.gpu_name}, {info.gpu_memory_gb} ГБ</div>}
         <ThemeToggle />
         {required && <button className="btn" type="button" onClick={() => void logout()}>Выйти</button>}
       </div>

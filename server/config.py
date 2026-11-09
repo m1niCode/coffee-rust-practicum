@@ -8,6 +8,7 @@ RUST_DATA_DIR       рабочие папки пользователей (заг
 RUST_OUT_DIR        общие готовые модели: видны всем, только для чтения.
 RUST_ALLOW_LOCAL_PATHS=1  локальный режим для занятий: данные берутся из папок на этом компьютере (поля путей и «Обзор…»),
                     результаты пишутся в RUST_OUT_DIR. Для общего сервера не включать: пользователь сможет читать любые папки.
+RUST_REQUIRE_GPU=1  не начинать обучение, если видеокарта недоступна (вместо тихого перехода на процессор, где оно идёт в десятки раз дольше).
 RUST_MAX_UPLOAD_MB  максимум на один запрос загрузки (по умолчанию 1024).
 RUST_MAX_WORKSPACE_MB  максимум данных одного пользователя (по умолчанию 4096).
 RUST_MAX_PARALLEL   сколько обучений идёт одновременно (по умолчанию 1).
@@ -30,6 +31,7 @@ def normalize_base_path(value):
     return "/" + value if value else ""
 
 
+REQUIRE_GPU = os.environ.get("RUST_REQUIRE_GPU", "").strip() == "1"
 ALLOW_LOCAL_PATHS = os.environ.get("RUST_ALLOW_LOCAL_PATHS", "").strip() == "1"
 TOKEN = os.environ.get("RUST_TOKEN", "").strip()
 BASE_PATH = normalize_base_path(os.environ.get("RUST_BASE_PATH"))

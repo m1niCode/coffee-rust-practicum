@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Серверный режим: интерфейс + API + обучение (по умолчанию на CPU).
+# Серверный режим: интерфейс + API + обучение (по умолчанию на видеокарте NVIDIA).
 # Базовые образы закреплены по тегу и digest (проверено 2026-11-09).
 
 # ---------- 1. сборка интерфейса ----------
@@ -12,8 +12,10 @@ RUN npm run build
 
 # ---------- 2. Python-пакеты в venv ----------
 FROM python:3.13.18-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS deps
-# CPU-сборка torch (≈200 МБ). Для видеокарты: --build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu126
-ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+# По умолчанию torch с CUDA 12.9: колёса уже содержат библиотеки CUDA, на хосте нужны только драйвер NVIDIA (525+)
+# и nvidia-container-toolkit. Поддерживает карты от Pascal до RTX 50.
+# Другие варианты: .../whl/cu126 (старые карты), .../whl/cu130 (драйвер 580+), .../whl/cpu (без видеокарты, образ ≈2 ГБ).
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cu129
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN python -m venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
@@ -35,7 +37,9 @@ ENV PATH=/opt/venv/bin:$PATH \
     RUST_OUT_DIR=/models \
     HF_HOME=/data/hf_cache \
     TORCH_HOME=/data/torch_cache \
-    MPLCONFIGDIR=/tmp/matplotlib
+    MPLCONFIGDIR=/tmp/matplotlib \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
 WORKDIR /app
 COPY --from=deps /opt/venv /opt/venv
 COPY app.py ./

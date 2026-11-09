@@ -1,17 +1,29 @@
-# Запуск на сервере: docker compose up -d --build
+# Запуск на сервере с видеокартой NVIDIA: docker compose up -d --build
+# Нужны драйвер NVIDIA и nvidia-container-toolkit на хосте. Без видеокарты: docker-compose.cpu.yml (см. README).
 # Токен и префикс задаются в файле .env рядом (см. .env.example).
 services:
   rust:
-    build: .
+    build:
+      context: .
+      args:
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu129}
     restart: unless-stopped
     environment:
       RUST_TOKEN: ${RUST_TOKEN:?задайте RUST_TOKEN в .env}
       RUST_BASE_PATH: ${RUST_BASE_PATH:-}
       RUST_MAX_PARALLEL: ${RUST_MAX_PARALLEL:-1}
+      RUST_REQUIRE_GPU: "1"            # без видеокарты обучение не стартует, а не уходит молча на процессор
     ports:
-      - "127.0.0.1:8765:8765"        # наружу выставляет nginx/Caddy с HTTPS
+      - "127.0.0.1:8765:8765"          # наружу выставляет nginx/Caddy с HTTPS
     volumes:
-      - rust-data:/data              # загрузки пользователей, их эксперименты, кэш весов
-      - ./OUT:/models:ro             # готовые общие модели (необязательно)
+      - rust-data:/data                # загрузки пользователей, их эксперименты, кэш весов
+      - ./OUT:/models:ro               # готовые общие модели (необязательно)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1                 # обучение использует одну карту (cuda:0)
+              capabilities: [gpu]
 volumes:
   rust-data:

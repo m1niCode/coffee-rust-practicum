@@ -84,15 +84,22 @@ def logout(response: Response):
     return {"ok": True}
 
 
-@protected.get("/info")
-def info():
-    device = "cpu"
+def _gpu():
+    """(есть ли видеокарта, её название, память в ГБ). Без torch или без видеокарты: (False, None, None)."""
     try:
         import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            p = torch.cuda.get_device_properties(0)
+            return True, p.name, round(p.total_memory / 2**30, 1)
     except Exception:
         pass
-    return {"device": device, "max_upload_mb": config.MAX_UPLOAD // 2**20, "local_paths": config.ALLOW_LOCAL_PATHS,
+    return False, None, None
+
+
+@protected.get("/info")
+def info():
+    has_gpu, gpu_name, gpu_gb = _gpu()
+    return {"device": "cuda" if has_gpu else "cpu", "gpu_name": gpu_name, "gpu_memory_gb": gpu_gb, "max_upload_mb": config.MAX_UPLOAD // 2**20, "local_paths": config.ALLOW_LOCAL_PATHS,
             "base_dir": config.BASE_DIR if config.ALLOW_LOCAL_PATHS else None}
 
 
@@ -246,6 +253,8 @@ def training_start(r: TrainRequest, ws: str = Depends(current_ws)):
     for label, d in (("для обучения", train_dir), ("для проверки", valid_dir)):
         if not os.path.isdir(d) or not find_pairs(d):
             raise HTTPException(422, "Нет загруженных пар «фото + маска» %s. Загрузите их на шаге «Данные»." % label)
+    if config.REQUIRE_GPU and r.device == "auto" and not _gpu()[0]:
+        raise HTTPException(503, "На сервере недоступна видеокарта, обучение не запущено. Сообщите администратору.")
     run = r.run_name.strip() or "exp"
     for ch in '<>:"/\\|?*.':
         run = run.replace(ch, "_")
