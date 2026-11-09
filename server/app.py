@@ -11,6 +11,8 @@ import io
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -90,7 +92,8 @@ def info():
         device = "cuda" if torch.cuda.is_available() else "cpu"
     except Exception:
         pass
-    return {"device": device, "max_upload_mb": config.MAX_UPLOAD // 2**20}
+    return {"device": device, "max_upload_mb": config.MAX_UPLOAD // 2**20, "local_paths": config.ALLOW_LOCAL_PATHS,
+            "base_dir": config.BASE_DIR if config.ALLOW_LOCAL_PATHS else None}
 
 
 # ---------------------------------------------------------------- данные
@@ -105,10 +108,34 @@ async def data_upload(request: Request, kind: str = Form(...), files: List[Uploa
     return await run_in_threadpool(uploads.save_uploads, ws, kind, items)
 
 
+class Folders(BaseModel):
+    train: str = ""
+    valid: str = ""
+    test: str = ""
+
+
 @protected.post("/data/check")
-def data_check(ws: str = Depends(current_ws)):
+def data_check(f: Optional[Folders] = None, ws: str = Depends(current_ws)):
     from core.data import check_folders  # cv2 нужен только здесь
+    if config.ALLOW_LOCAL_PATHS and f and (f.train.strip() or f.valid.strip()):
+        return check_folders(f.train.strip(), f.valid.strip(), f.test.strip())
     return check_folders(*(data_dir(ws, k) for k in KINDS))
+
+
+@protected.post("/browse-folder")
+def browse_folder():
+    """Локальный режим: диалог выбора папки открывается на этом же компьютере отдельным процессом."""
+    if not config.ALLOW_LOCAL_PATHS:
+        raise HTTPException(403, "Выбор папки на сервере отключён. Загрузите файлы кнопкой.")
+    code = ("import tkinter as tk\nfrom tkinter import filedialog\nr=tk.Tk();r.withdraw();r.attributes('-topmost',True)\n"
+            "print(filedialog.askdirectory(title='Выберите папку') or '', end='')")
+    try:
+        out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        return {"path": ""}
+    if out.returncode != 0:
+        raise HTTPException(500, "Не удалось открыть окно выбора папки. Впишите путь вручную.")
+    return {"path": out.stdout.strip()}
 
 
 class ClearRequest(BaseModel):
@@ -143,7 +170,8 @@ def _resolve(ws, ident):
 @protected.get("/experiments")
 def experiments(ws: str = Depends(current_ws)):
     own = [dict(e, shared=False) for e in list_experiments(out_dir(ws))]
-    shared = [dict(e, id=SHARED + e["id"], shared=True) for e in list_experiments(config.SHARED_OUT_DIR)]
+    shared = [] if config.ALLOW_LOCAL_PATHS else [dict(e, id=SHARED + e["id"], shared=True)
+                                                  for e in list_experiments(config.SHARED_OUT_DIR)]
     return sorted(own + shared, key=lambda e: e["modified"], reverse=True)
 
 
@@ -184,6 +212,9 @@ def experiment_delete(ident: str, ws: str = Depends(current_ws)):
 
 # ---------------------------------------------------------------- обучение
 class TrainRequest(BaseModel):
+    train_dir: str = ""      # только в локальном режиме (RUST_ALLOW_LOCAL_PATHS=1)
+    valid_dir: str = ""
+    test_dir: str = ""
     run_name: str = "exp"
     arch: Literal["Unet", "FPN", "DeepLabV3Plus"] = "Unet"
     encoder: Literal["resnet18", "resnet34", "resnet50"] = "resnet18"
@@ -208,6 +239,10 @@ def training_start(r: TrainRequest, ws: str = Depends(current_ws)):
     if r.img_size % 32:
         raise HTTPException(422, "Размер изображения должен быть кратен 32.")
     train_dir, valid_dir, test_dir = (data_dir(ws, k) for k in KINDS)
+    if config.ALLOW_LOCAL_PATHS and (r.train_dir.strip() or r.valid_dir.strip()):
+        train_dir, valid_dir, test_dir = r.train_dir.strip(), r.valid_dir.strip(), r.test_dir.strip()
+        if r.test_dir.strip() and not os.path.isdir(test_dir):
+            raise HTTPException(422, "Папка test не найдена. Укажите её или очистите поле.")
     for label, d in (("для обучения", train_dir), ("для проверки", valid_dir)):
         if not os.path.isdir(d) or not find_pairs(d):
             raise HTTPException(422, "Нет загруженных пар «фото + маска» %s. Загрузите их на шаге «Данные»." % label)

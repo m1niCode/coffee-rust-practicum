@@ -21,17 +21,19 @@ const line = (name: string, f: FolderInfo, needMask: boolean) => {
 };
 
 /** Проверка загруженных данных. `refresh` растёт после каждой загрузки, и проверка запускается сама. */
-export function CheckData({ refresh }: { refresh: number }) {
+interface Folders { train: string; valid: string; test: string }
+
+export function CheckData({ refresh, folders }: { refresh: number; folders?: Folders }) {
   const [res, setRes] = useState<DataCheck | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const run = useCallback(async () => {
     setBusy(true); setErr(null);
-    try { setRes(await post<DataCheck>('/data/check')); }
+    try { setRes(await post<DataCheck>('/data/check', folders)); }
     catch (e) { setErr(e instanceof Error ? e.message : 'Не удалось проверить данные.'); }
     finally { setBusy(false); }
-  }, []);
-  useEffect(() => { void run(); }, [run, refresh]);
+  }, [folders]);
+  useEffect(() => { if (!folders) void run(); }, [run, refresh, folders]);
   return (
     <div>
       <button className="btn" type="button" onClick={() => void run()} disabled={busy}>
@@ -43,7 +45,7 @@ export function CheckData({ refresh }: { refresh: number }) {
           <>
             {line('Для обучения', res.train, true)}
             {line('Для проверки', res.valid, true)}
-            {res.test.exists ? line('Для итоговой оценки', res.test, false) : <Row ok>Данные для итоговой оценки не загружены: этот шаг будет пропущен.</Row>}
+            {res.test.exists || folders?.test.trim() ? line('Для итоговой оценки', res.test, false) : <Row ok>Данные для итоговой оценки не загружены: этот шаг будет пропущен.</Row>}
             {res.duplicates_count > 0
               ? <Row>Одинаковые имена файлов есть и в обучении, и в проверке ({res.duplicates_count} шт.). Оценка качества получится завышенной.</Row>
               : res.ok && <Row ok>Одинаковых снимков в обучении и проверке не найдено.</Row>}

@@ -17,7 +17,7 @@
 | 2. Данные | скопировать `train/`, `valid/`, `test/`, `OUT/` (с `.pth`) в папку проекта | они не хранятся в git |
 | 3. Установка | `bash setup_ubuntu.sh` (без NVIDIA: `--cpu`) | в конце «Всё готово к занятию» |
 | 4. Без интернета | `.venv/bin/python check_env.py --offline` | веса ImageNet есть в кэше |
-| 5. Пробный запуск | `source .venv/bin/activate && python app.py`, обучить 1 эпоху | браузер открыл `http://127.0.0.1:8765` |
+| 5. Пробный запуск | `source .venv/bin/activate && RUST_ALLOW_LOCAL_PATHS=1 python app.py`, обучить 1 эпоху | браузер открыл `http://127.0.0.1:8765` |
 
 `setup_ubuntu.sh` ставит три изолированных окружения (`.venv` — обучение, `.venv-labelme`,
 `.venv-ls`), собирает набор для разметки `practicum/label_set/` и мини-датасет `practicum/data_mini/`.
@@ -116,7 +116,7 @@ python tools/compare_masks.py practicum/my_masks
 
 ### 3. Данные (10 мин)
 
-Запустить приложение: `python app.py` → «Обучить модель» → шаг «Данные».
+Запустить приложение: `RUST_ALLOW_LOCAL_PATHS=1 python app.py` (режим с папками) → «Обучить модель» → шаг «Данные».
 Указать папки `practicum/data_mini/train`, `…/valid`, `…/test` → «Проверить данные».
 
 Разобрать:

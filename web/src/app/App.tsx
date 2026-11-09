@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useExperiments } from '@/entities/experiment/model/store';
 import { useTraining } from '@/entities/training/model/store';
 import { useSession } from '@/entities/session/model/store';
+import { useSettings } from '@/features/train-settings/model/store';
 import { LoginForm } from '@/features/login/ui/LoginForm';
 import { CheckPage } from '@/pages/check/ui/CheckPage';
 import { DataPage } from '@/pages/data/ui/DataPage';
@@ -25,7 +26,15 @@ export function App() {
   useEffect(() => { void check(); }, [check]);
   useEffect(() => {
     if (!checked || !authed) return;
-    void load();
+    void load().then(() => {
+      // локальный режим: папки данных по умолчанию лежат рядом с программой
+      const base = useExperiments.getState().info?.base_dir;
+      const st = useSettings.getState();
+      if (base && !st.train_dir) {
+        const sep = base.includes('\\') ? '\\' : '/';
+        st.set({ train_dir: base + sep + 'train', valid_dir: base + sep + 'valid', test_dir: base + sep + 'test' });
+      }
+    });
     void attach();
   }, [checked, authed, load, attach]);
 

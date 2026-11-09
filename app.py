@@ -22,6 +22,8 @@ def main():
     url = "http://%s:%d%s/" % (shown, config.PORT, config.BASE_PATH)
     if "--no-browser" not in sys.argv:
         threading.Thread(target=lambda: (time.sleep(1.2), webbrowser.open(url)), daemon=True).start()
+    if config.ALLOW_LOCAL_PATHS and config.HOST not in ("127.0.0.1", "localhost", "::1"):
+        print("ВНИМАНИЕ: включён RUST_ALLOW_LOCAL_PATHS, а сервер доступен по сети: пользователи смогут читать любые папки на этом компьютере.")
     if config.HOST not in ("127.0.0.1", "localhost", "::1") and not config.TOKEN:
         print("ВНИМАНИЕ: сервер доступен по сети, а RUST_TOKEN не задан. Любой, кто знает адрес, сможет им пользоваться.")
     print("Приложение запущено: %s  (остановить: Ctrl+C)" % url)

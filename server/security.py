@@ -86,6 +86,8 @@ def data_dir(ws, kind):
 
 
 def out_dir(ws):
+    if config.ALLOW_LOCAL_PATHS:          # локальный режим: один пользователь, результаты рядом с программой
+        return config.SHARED_OUT_DIR
     return os.path.join(ws_root(ws), "OUT")
 
 

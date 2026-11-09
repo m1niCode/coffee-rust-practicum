@@ -56,5 +56,5 @@ cd ~/coffee && .venv/bin/python check_env.py --offline
 ## Перед занятием (на каждой станции)
 
 1. `check_env.py --offline` → «Всё готово к занятию».
-2. `source .venv/bin/activate && python app.py` → открылся браузер, в «Результатах» видны exp1–exp3.
+2. `source .venv/bin/activate && RUST_ALLOW_LOCAL_PATHS=1 python app.py` → открылся браузер, в «Результатах» видны exp1–exp3.
 3. `.venv-labelme/bin/labelme practicum/label_set/images` → окно открывается.

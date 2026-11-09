@@ -89,4 +89,7 @@ export interface AnalyzeResponse {
 export interface AppInfo {
   device: 'cpu' | 'cuda';
   max_upload_mb: number;
+  /** Локальный режим для занятий: данные берутся из папок на этом компьютере. */
+  local_paths: boolean;
+  base_dir: string | null;
 }

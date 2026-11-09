@@ -56,7 +56,7 @@ echo "== 6/6 Проверка и загрузка весов ImageNet в кэш"
 cat <<'EOF'
 
 Готово. Команды на занятии (из папки проекта):
-  source .venv/bin/activate && python app.py                       # приложение обучения
+  source .venv/bin/activate && RUST_ALLOW_LOCAL_PATHS=1 python app.py                       # приложение обучения
   .venv-labelme/bin/labelme practicum/label_set/images --labels practicum/labelme_labels.txt --nodata --autosave
   .venv-ls/bin/label-studio start --port 8080                       # Label Studio (альтернатива)
 Перед занятием без интернета проверьте:  .venv/bin/python check_env.py --offline
